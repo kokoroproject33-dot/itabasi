@@ -2009,4 +2009,2061 @@
 </script>
 
 </body>
+</html><!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Eco-Town Legend EX - Mobile Base</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=DotGothic16&display=swap');
+
+    :root {
+      --primary-bg: #050505;
+      --panel-bg: rgba(20, 20, 20, 0.9);
+      --border-color: #ffffff;
+    }
+
+    body {
+      background-color: var(--primary-bg);
+      color: #fff;
+      font-family: 'DotGothic16', sans-serif;
+      margin: 0;
+      overflow: hidden;
+      touch-action: manipulation;
+    }
+
+    .app-container {
+      width: 100vw;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      max-width: 500px;
+      margin: 0 auto;
+      border-left: 1px solid #333;
+      border-right: 1px solid #333;
+    }
+
+    .btn-action {
+      background: #222;
+      border: 2px solid var(--border-color);
+      padding: 12px 8px;
+      text-align: center;
+      font-size: 14px;
+      cursor: pointer;
+      transition: transform 0.1s, background 0.1s;
+    }
+    .btn-action:active:not(.disabled) {
+      transform: scale(0.95);
+      background: #fff;
+      color: #000;
+    }
+    .disabled {
+      opacity: 0.3;
+      pointer-events: none;
+      filter: grayscale(1);
+    }
+
+    .stat-bar {
+      height: 12px;
+      background: #111;
+      border: 1px solid #444;
+      border-radius: 6px;
+      overflow: hidden;
+    }
+
+    #game-canvas {
+      image-rendering: pixelated;
+      width: 100%;
+      background: #0a0a0a;
+      flex-shrink: 0;
+      display: block;
+    }
+
+    .ad-placeholder {
+      background: #1a1a1a;
+      color: #444;
+      height: 50px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 10px;
+      border-top: 1px solid #333;
+    }
+
+    .floating-text {
+      position: absolute;
+      animation: floatUp 1.2s ease-out forwards;
+      pointer-events: none;
+      font-weight: bold;
+      font-size: 16px;
+      z-index: 100;
+      text-shadow: 2px 2px #000;
+    }
+    @keyframes floatUp {
+      0% { transform: translateY(0); opacity: 1; }
+      100% { transform: translateY(-60px); opacity: 0; }
+    }
+
+    .tab-content { display: none; height: 100%; overflow-y: auto; }
+    .tab-content.active { display: block; }
+
+    #custom-modal {
+      display: none;
+      position: absolute;
+      inset: 0;
+      background: rgba(0,0,0,0.8);
+      z-index: 1000;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+
+    .hint-banner {
+      position: absolute;
+      left: 50%;
+      transform: translateX(-50%);
+      bottom: 8px;
+      background: rgba(0,0,0,0.75);
+      border: 1px solid rgba(255,255,255,0.35);
+      padding: 6px 10px;
+      font-size: 10px;
+      z-index: 30;
+      pointer-events: none;
+      white-space: nowrap;
+    }
+
+    .asset-status {
+      position: absolute;
+      top: 8px;
+      right: 8px;
+      background: rgba(0,0,0,0.70);
+      border: 1px solid rgba(255,255,255,0.35);
+      padding: 4px 6px;
+      font-size: 9px;
+      z-index: 25;
+      pointer-events: none;
+      line-height: 1.25;
+      text-align: right;
+      white-space: nowrap;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="app-container">
+    <!-- ステータスバー -->
+    <div class="grid grid-cols-3 gap-1 p-2 bg-black border-b-2 border-white text-[10px]">
+      <div class="text-center">
+        <div class="text-gray-400">資金</div>
+        <div class="text-yellow-400 font-bold text-sm"><span id="ui-money">0</span> G</div>
+      </div>
+      <div class="text-center border-x border-gray-800">
+        <div class="text-gray-400">人口</div>
+        <div class="text-white font-bold text-sm" id="ui-pop">100</div>
+      </div>
+      <div class="text-center">
+        <div class="text-gray-400">ゴミ</div>
+        <div class="text-red-400 font-bold text-sm" id="ui-waste">0.0</div>
+      </div>
+    </div>
+
+    <!-- メインビジュアル（Canvas） -->
+    <div class="relative overflow-hidden bg-black" id="screen-container">
+      <canvas id="game-canvas"></canvas>
+
+      <!-- 4ステ -->
+      <div class="absolute top-2 left-2 bg-black/70 p-1 border border-white/50 text-[9px] z-20">
+        ATK:<span id="st-atk">0</span>
+        DEF:<span id="st-def">0</span>
+        SPD:<span id="st-spd">0</span>
+        LUK:<span id="st-luk">0</span>
+      </div>
+
+      <div class="asset-status" id="asset-status">ASSET: ...</div>
+
+      <div id="place-hint" class="hint-banner hidden">
+        施設を置く場所をタップ（道路には置けません）
+      </div>
+    </div>
+
+    <!-- バトルHUD -->
+    <div id="battle-hud" class="hidden bg-black/90 border-t border-white/20 p-2 space-y-2">
+      <div class="border-2 border-red-500 p-2 bg-black/80">
+        <div id="enemy-name" class="text-xs text-red-500 font-bold mb-1 text-center">MONSTER</div>
+        <div class="stat-bar">
+          <div id="enemy-hp-bar" class="bg-red-600 h-full w-full transition-all duration-300"></div>
+        </div>
+        <div id="enemy-hp-text" class="text-[10px] text-white mt-1 text-center">0/0</div>
+      </div>
+
+      <div class="border-2 border-blue-500 p-2 bg-black/80">
+        <div class="text-[10px] text-blue-400 font-bold mb-1 text-center">PLAYER HP</div>
+        <div class="stat-bar">
+          <div id="battle-player-hp-bar" class="bg-green-500 h-full w-full transition-all duration-300"></div>
+        </div>
+        <div id="battle-player-hp-text" class="text-[10px] text-white mt-1 text-center">100/100</div>
+      </div>
+    </div>
+
+    <!-- ログ -->
+    <div id="msg-layer" class="w-full bg-black/80 p-2 text-[11px] border-t border-white/30 h-12 flex items-center">
+      <div id="game-log">遠征の準備をしましょう。</div>
+    </div>
+
+    <!-- 環境インジケーター -->
+    <div class="p-2 bg-gray-900 grid grid-cols-3 gap-2 text-[9px] border-b border-white/20">
+      <div>
+        🌍 環境 <span id="val-env">80</span>%
+        <div class="stat-bar"><div id="bar-env" class="bg-green-500 h-full"></div></div>
+      </div>
+      <div>
+        ⚖️ 治安 <span id="val-sec">80</span>%
+        <div class="stat-bar"><div id="bar-sec" class="bg-blue-500 h-full"></div></div>
+      </div>
+      <div>
+        💊 健康 <span id="val-heal">80</span>%
+        <div class="stat-bar"><div id="bar-heal" class="bg-red-500 h-full"></div></div>
+      </div>
+    </div>
+
+    <!-- コンテンツ -->
+    <div class="flex-grow bg-black p-3 relative overflow-hidden">
+      <!-- 街 -->
+      <div id="tab-town" class="tab-content active space-y-3">
+        <div class="text-[11px] text-gray-200 border border-white/20 p-2">
+          🧹 清掃力：<span id="ui-clean">0.0</span> / 秒（清掃員 <span id="ui-staff">0</span> 人）
+        </div>
+
+        <button onclick="buyUpgrade('park')" class="btn-action w-full flex justify-between items-center">
+          <span>⛲ 公園整備（環境+）</span><span class="text-yellow-400">1,000G</span>
+        </button>
+        <button onclick="buyUpgrade('medical')" class="btn-action w-full flex justify-between items-center">
+          <span>💊 医療投資（健康+）</span><span class="text-yellow-400">2,500G</span>
+        </button>
+
+        <button onclick="selectFacilityToPlace('hospital')" class="btn-action w-full flex justify-between items-center">
+          <span>🏥 病院 設置（最大5）</span><span class="text-yellow-400">2,500G</span>
+        </button>
+        <button onclick="selectFacilityToPlace('police')" class="btn-action w-full flex justify-between items-center">
+          <span>🚓 警察署 設置</span><span class="text-yellow-400">6,000G</span>
+        </button>
+        <button onclick="selectFacilityToPlace('fire')" class="btn-action w-full flex justify-between items-center">
+          <span>🚒 消防署 設置</span><span class="text-yellow-400">6,000G</span>
+        </button>
+
+        <button onclick="recruitStaff()" class="btn-action w-full flex justify-between items-center">
+          <span>🧹 清掃員雇用</span><span class="text-yellow-400" id="staff-cost">300G</span>
+        </button>
+
+        <div class="text-[10px] text-gray-300 border border-white/10 p-2">
+          ✅ 施設は「好きな位置」に置けます（<b>道路には不可</b>）。<br/>
+          ✅ 既に建物がある場所に置くと、その建物は消え、人口が減ります（例：ビルなら -50）。<br/>
+          ✅ 効果：警察署=盗難/放火の抑止、消防署=放火の鎮火判定、病院=感染拡大の抑止。
+        </div>
+      </div>
+
+      <!-- 装備/店 -->
+      <div id="tab-shop" class="tab-content space-y-2">
+        <div class="text-[10px] border border-white/20 p-2 text-gray-200">
+          🧰 ゴミ袋系は「購入 → もう一度タップ」で装備できます（回収上限が変化）。
+        </div>
+
+        <button onclick="openGachaModal()" class="btn-action w-full flex justify-between items-center">
+          <span>🎰 サポートガチャ（1回）</span><span class="text-yellow-400">500G</span>
+        </button>
+        <button onclick="openSupportModal()" class="btn-action w-full flex justify-between items-center">
+          <span>🧑‍🤝‍🧑 サポート一覧 / 装備</span><span class="text-gray-400">管理</span>
+        </button>
+
+        <div id="shop-items" class="space-y-2 pb-4"></div>
+      </div>
+
+      <!-- 遠征 -->
+      <div id="tab-explore" class="tab-content">
+        <div id="ui-town-ctrl" class="space-y-3">
+          <div class="flex justify-between text-xs">
+            <span>Lv.<span id="ui-lv">1</span> HP:<span id="ui-hp-text">100/100</span></span>
+            <span>NEXT:<span id="ui-xp">50</span></span>
+          </div>
+          <div class="stat-bar"><div id="hp-bar" class="bg-green-500 h-full w-full"></div></div>
+
+          <!-- ✅「ゲーム始める」導線：遠征ボタンを明確化 -->
+          <button onclick="startDungeon()" class="btn-action w-full bg-red-900 py-6 text-lg font-bold">
+            ▶ 廃棄物エリアへ遠征（ゲーム開始）
+          </button>
+
+          <div class="text-[10px] text-gray-300 border border-white/10 p-2">
+            ※遠征中は「街づくり/装備」は開けません。撤退して戻ってください。
+          </div>
+        </div>
+
+        <div id="loot-panel" class="mt-3 space-y-1">
+          <div class="mt-1 text-[10px] flex justify-between">
+            <span>🗑️ 回収（ゴミ袋）</span>
+            <span><span id="ui-loot">0</span> / <span id="ui-loot-max">100</span></span>
+          </div>
+          <div class="stat-bar">
+            <div id="loot-bar" class="bg-yellow-400 h-full w-0 transition-all duration-300"></div>
+          </div>
+          <div class="text-[9px] text-gray-300 mt-1">
+            装備：<span id="ui-bag-name">-</span>
+          </div>
+        </div>
+
+        <div id="ui-dungeon-ctrl" class="mt-3 hidden grid grid-cols-2 gap-2">
+          <button onclick="dungeonStep()" class="btn-action col-span-2 bg-blue-900 py-8 text-xl">🚶 探索(前進)</button>
+          <button onclick="useDrink()" id="btn-drink" class="btn-action">🧪 ボトル(0)</button>
+          <button onclick="returnTown()" class="btn-action bg-gray-800">🏠 撤退</button>
+        </div>
+
+        <div id="ui-battle-ctrl" class="mt-3 hidden grid grid-cols-2 gap-2">
+          <button id="btn-atk" onclick="battleTurn('attack')" class="btn-action bg-red-600 py-4 font-bold">⚔️ 攻撃</button>
+          <button id="btn-def" onclick="battleTurn('defend')" class="btn-action bg-blue-600 py-4 font-bold">🛡️ 防御</button>
+          <button id="btn-heal" onclick="battleTurn('heal')" class="btn-action bg-green-600 py-4 font-bold">🧪 回復</button>
+          <button id="btn-flee" onclick="battleTurn('flee')" class="btn-action bg-gray-600 py-4 font-bold">🏃 逃走</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ナビ -->
+    <div class="grid grid-cols-3 bg-white text-black font-bold text-xs shadow-[0_-4px_10px_rgba(0,0,0,0.5)]">
+      <button id="nav-town" onclick="showTab('town')" class="py-4 border-r border-gray-300 active:bg-gray-200">街づくり</button>
+      <button id="nav-shop" onclick="showTab('shop')" class="py-4 border-r border-gray-300 active:bg-gray-200">装備/店</button>
+      <button id="nav-explore" onclick="showTab('explore')" class="py-4 active:bg-gray-200">遠征</button>
+    </div>
+
+    <div class="ad-placeholder" onclick="simulateAdReward()">
+      ここにバナー広告が表示されます (クリックで動画広告報酬テスト)
+    </div>
+  </div>
+
+  <div id="custom-modal">
+    <div class="bg-gray-900 border-2 border-white p-6 w-full max-w-xs text-center">
+      <div id="modal-text" class="mb-6 text-sm"></div>
+      <button onclick="closeModal()" class="btn-action w-full">OK</button>
+    </div>
+  </div>
+
+  <!-- ガチャモーダル -->
+  <div id="gacha-modal" style="display:none; position:absolute; inset:0; background:rgba(0,0,0,0.85); z-index:1200; align-items:center; justify-content:center; padding:18px;">
+    <div class="bg-gray-900 border-2 border-white p-4 w-full max-w-sm text-center space-y-3">
+      <div class="text-sm font-bold">🎰 サポートガチャ</div>
+      <div class="text-[10px] text-gray-300">500Gで1回。サポートが増えるほどステータスが伸びます。</div>
+      <div id="gacha-result" class="text-sm py-3 border border-white/20 bg-black/40">結果はここに表示されます</div>
+      <div class="grid grid-cols-2 gap-2">
+        <button onclick="doGachaOnce()" class="btn-action">1回引く</button>
+        <button onclick="closeGachaModal()" class="btn-action">閉じる</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- サポート管理モーダル -->
+  <div id="support-modal" style="display:none; position:absolute; inset:0; background:rgba(0,0,0,0.85); z-index:1200; align-items:center; justify-content:center; padding:18px;">
+    <div class="bg-gray-900 border-2 border-white p-4 w-full max-w-sm text-left space-y-3">
+      <div class="text-center text-sm font-bold">🧑‍🤝‍🧑 サポート管理</div>
+      <div class="text-[10px] text-gray-300">所持一覧からスロット1〜3に装備できます。</div>
+
+      <div class="text-[10px] border border-white/20 p-2 bg-black/30">
+        装備中：① <span id="eq1">-</span> ／ ② <span id="eq2">-</span> ／ ③ <span id="eq3">-</span>
+      </div>
+
+      <div id="support-list" class="space-y-2 max-h-[45vh] overflow-y-auto"></div>
+
+      <button onclick="closeSupportModal()" class="btn-action w-full">閉じる</button>
+    </div>
+  </div>
+
+<script>
+  // =========================================================
+  // 4ステ対応（ATK/DEF/SPD/LUK）
+  // =========================================================
+
+  const MONEY_PER_LOOT = 5;
+  const CITY_WASTE_REDUCTION_PER_LOOT = 0.03;
+
+  const ENEMY_WASTE_SCALE_MAX = 15;
+  const ENEMY_HP_BOOST_MAX = 1.2;
+  const ENEMY_ATK_BOOST_MAX = 0.6;
+
+  const BOSS_DISTANCE_M = 200;
+  const STEP_M = 10;
+  const BOSS_DISTANCE_STEP = Math.floor(BOSS_DISTANCE_M / STEP_M);
+  const BOSS_WASTE_REDUCE_RATE = 0.30;
+
+  const BOSS = {
+    n: "不法投棄キング",
+    h: 900,
+    a: 65,
+    s: 12,
+    x: 900,
+    e: "👑",
+    imgKey: null,
+    hpWeight: 0.8,
+    atkWeight: 0.7
+  };
+
+  const clamp = (v,a,b)=>Math.max(a,Math.min(b,v));
+  const floor1 = (v)=>Math.max(1, Math.floor(v));
+
+  function critChance(luk){ return clamp(luk * 0.005, 0, 0.25); }
+  function dodgeChance(spd, enemySpd){ return clamp((spd - enemySpd) * 0.03, 0, 0.25); }
+  function reduceDamage(raw, def){
+    return floor1(raw * 100 / (100 + Math.max(0, def)));
+  }
+
+  const canvas = document.getElementById('game-canvas');
+  const ctx = canvas.getContext('2d');
+
+  function resizeCanvas() {
+    const container = document.getElementById('screen-container');
+    canvas.width = container.clientWidth;
+    canvas.height = 200;
+  }
+  window.addEventListener('resize', resizeCanvas);
+  resizeCanvas();
+
+  const assetStatusEl = document.getElementById('asset-status');
+
+  function loadImage(src) {
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.onload = () => resolve({ ok: true, img, src });
+      img.onerror = () => resolve({ ok: false, img: null, src });
+      img.src = src;
+    });
+  }
+
+  const ASSET_PATH = "assets/";
+
+  const ASSET_LIST = {
+    sy:     ASSET_PATH + "support/yuzuki/yuzuki.png",
+    sm:     ASSET_PATH + "support/mirako/mirako.png",
+    sf:     ASSET_PATH + "support/fromzero/fromzero.png",
+
+    road:   ASSET_PATH + "road_tiles.png",
+    build:  ASSET_PATH + "building_tiles.png",
+    civic:  ASSET_PATH + "service_buildings.png",
+    player: ASSET_PATH + "player_sheet.jpg",
+    e1:     ASSET_PATH + "enemy_1_cutout.png",
+    e2:     ASSET_PATH + "enemy_2_cutout.png",
+    e3:     ASSET_PATH + "enemy_3_cutout.png",
+  };
+
+  const ASSETS = {
+    supportY:{ img: null, ok: false },
+    supportM:{ img: null, ok: false },
+    supportF:{ img: null, ok: false },
+    road:  { img: null, ok: false },
+    build: { img: null, ok: false },
+    civic: { img: null, ok: false },
+    player:{ img: null, ok: false },
+    enemy1:{ img: null, ok: false },
+    enemy2:{ img: null, ok: false },
+    enemy3:{ img: null, ok: false },
+  };
+
+  const ROAD_TILES  = { get img(){ return ASSETS.road.img;  }, get ready(){ return ASSETS.road.ok;  }, tileSize: 128, cols: 8 };
+  const BUILD_TILES = { get img(){ return ASSETS.build.img; }, get ready(){ return ASSETS.build.ok; }, tileSize: 256, cols: 6 };
+  const CIVIC_TILES = { get img(){ return ASSETS.civic.img; }, get ready(){ return ASSETS.civic.ok; }, tileSize: 0, cols: 3 };
+
+  async function loadAllAssets() {
+    const keys = Object.keys(ASSET_LIST);
+    const results = await Promise.all(keys.map(k => loadImage(ASSET_LIST[k])));
+    const bySrc = new Map(results.map(r => [r.src, r]));
+
+    function put(targetKey, src) {
+      const r = bySrc.get(src);
+      ASSETS[targetKey].ok = !!r?.ok;
+      ASSETS[targetKey].img = r?.img || null;
+    }
+
+    put("supportY", ASSET_LIST.sy);
+    put("supportM", ASSET_LIST.sm);
+    put("supportF", ASSET_LIST.sf);
+    put("road",  ASSET_LIST.road);
+    put("build", ASSET_LIST.build);
+    put("civic", ASSET_LIST.civic);
+    put("player",ASSET_LIST.player);
+    put("enemy1",ASSET_LIST.e1);
+    put("enemy2",ASSET_LIST.e2);
+    put("enemy3",ASSET_LIST.e3);
+
+    if (ASSETS.civic.ok && ASSETS.civic.img) {
+      CIVIC_TILES.cols = 3;
+      CIVIC_TILES.tileSize = Math.floor(ASSETS.civic.img.width / 3);
+      if (!CIVIC_TILES.tileSize || CIVIC_TILES.tileSize < 1) CIVIC_TILES.tileSize = 64;
+    }
+
+    updateAssetStatus();
+  }
+
+  function updateAssetStatus() {
+    const s = (ok)=> ok ? "OK" : "NG";
+    assetStatusEl.innerText =
+      `ASSET\n`+
+      `road:${s(ASSETS.road.ok)} build:${s(ASSETS.build.ok)} civic:${s(ASSETS.civic.ok)}\n`+
+      `ply:${s(ASSETS.player.ok)} e1:${s(ASSETS.enemy1.ok)} e2:${s(ASSETS.enemy2.ok)} e3:${s(ASSETS.enemy3.ok)}`;
+  }
+
+  const ENEMY_IMG = {
+    enemy1: { get img(){ return ASSETS.enemy1.img; }, get ready(){ return ASSETS.enemy1.ok; } },
+    enemy2: { get img(){ return ASSETS.enemy2.img; }, get ready(){ return ASSETS.enemy2.ok; } },
+    enemy3: { get img(){ return ASSETS.enemy3.img; }, get ready(){ return ASSETS.enemy3.ok; } },
+  };
+
+  function drawEnemySprite(enemy, x, y) {
+    if (!enemy) return;
+
+    const key = enemy.imgKey;
+    const pack = key ? ENEMY_IMG[key] : null;
+
+    if (pack && pack.ready && pack.img) {
+      const img = pack.img;
+      const targetW = Math.floor(canvas.width * 0.34);
+      const scale = targetW / img.width;
+      const dw = Math.floor(img.width * scale);
+      const dh = Math.floor(img.height * scale);
+
+      ctx.save();
+      ctx.imageSmoothingEnabled = true;
+      ctx.drawImage(img, x - dw/2, y - dh/2, dw, dh);
+      ctx.restore();
+      return;
+    }
+
+    ctx.save();
+    ctx.font = "48px 'DotGothic16', monospace";
+    ctx.textAlign = "center";
+    ctx.fillText(enemy.e || "👾", x, y);
+    ctx.restore();
+  }
+
+  function drawTileSheet(tilePack, tileId, dx, dy, dw, dh, fallbackColor) {
+    if (!tilePack.ready || !tilePack.img || !tilePack.tileSize) {
+      ctx.fillStyle = fallbackColor || "#333";
+      ctx.fillRect(dx, dy, dw, dh);
+      ctx.save();
+      ctx.globalAlpha = 0.9;
+      ctx.fillStyle = "#ff4444";
+      ctx.font = "10px 'DotGothic16'";
+      ctx.textAlign = "left";
+      ctx.textBaseline = "top";
+      ctx.fillText("IMG?", dx + 2, dy + 2);
+      ctx.restore();
+      return;
+    }
+    const ts = tilePack.tileSize;
+    const sx = (tileId % tilePack.cols) * ts;
+    const sy = Math.floor(tileId / tilePack.cols) * ts;
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(tilePack.img, sx, sy, ts, ts, dx, dy, dw, dh);
+  }
+
+  const TILE_GRASS = 0;
+  const TILE_ROAD  = 1;
+
+  const BLD_EMPTY = -1;
+  const BLD_HUT   = 0;
+  const BLD_HOUSE = 1;
+  const BLD_APT   = 2;
+  const BLD_BIG   = 3;
+  const BLD_PARK  = 10;
+  const BLD_TREE  = 16;
+
+  const BLD_POLICE   = 100;
+  const BLD_FIRE     = 101;
+  const BLD_HOSPITAL = 102;
+
+  function isFacilityTile(id) {
+    return id === BLD_POLICE || id === BLD_FIRE || id === BLD_HOSPITAL;
+  }
+  function civicTileIdOfBuildingId(id) {
+    if (id === BLD_POLICE) return 0;
+    if (id === BLD_FIRE) return 1;
+    if (id === BLD_HOSPITAL) return 2;
+    return -1;
+  }
+
+  const TOWN_W = 16;
+  const TOWN_H = 9;
+
+  let townMap = Array.from({ length: TOWN_H }, (_, y) =>
+    Array.from({ length: TOWN_W }, (_, x) =>
+      (y === Math.floor(TOWN_H / 2) ? TILE_ROAD : TILE_GRASS)
+    )
+  );
+
+  let buildingMap = Array.from({ length: TOWN_H }, () =>
+    Array.from({ length: TOWN_W }, () => BLD_EMPTY)
+  );
+
+  let infected = Array.from({ length: TOWN_H }, () =>
+    Array.from({ length: TOWN_W }, () => 0)
+  );
+
+  const RARITY_MULT = { 1: 0.6, 2: 0.8, 3: 1.0, 4: 1.25, 5: 1.55 };
+
+  const SUPPORT_MASTER = {
+    yuzuki: {
+      name: "ゆづき",
+      icon: "✨",
+      imgKey: "supportY",
+      base: { atk: 3, def: 0, spd: 1, maxHp: 0 },
+      skill: { id: "focus_clean", name: "集中清掃" }
+    },
+    mirako: {
+      name: "みらこ",
+      icon: "🌸",
+      imgKey: "supportM",
+      base: { atk: 2, def: 3, spd: 2, maxHp: 20 },
+      skill: { id: "kind_guard", name: "優しさの護り" }
+    },
+    fromzero: {
+      name: "FromZero",
+      icon: "🧹",
+      imgKey: "supportF",
+      base: { atk: 4, def: 1, spd: 0, maxHp: 30 },
+      skill: { id: "zero_spirit", name: "ゼロの魂" }
+    }
+  };
+
+  const DUPE_RATE = {
+    1: 0.01,
+    2: 0.02,
+    3: 0.04,
+    4: 0.07,
+    5: 0.10
+  };
+
+  function rarityColor(r) {
+    if (r === 1) return "#ffffff";
+    if (r === 2) return "#22c55e";
+    if (r === 3) return "#3b82f6";
+    if (r === 4) return "#a855f7";
+    if (r === 5) return "#ef4444";
+    return "#ffffff";
+  }
+
+  function rarityText(r, dupes = 0) {
+    const stars = "★".repeat(r);
+    return dupes > 0 ? `${stars}+${dupes}` : stars;
+  }
+
+  function rarityBadgeHTML(r, dupes = 0) {
+    const color = rarityColor(r);
+    const txt = rarityText(r, dupes);
+    return `<span style="color:${color}; font-weight:bold;">${txt}</span>`;
+  }
+
+  let state = {
+    // ✅ modeは「描画/進行状態」用。タブは別で持つ（これが安定化のポイント）
+    mode: 'town',     // town / dungeon / battle
+    uiTab: 'town',    // town / shop / explore
+
+    money: 500,
+    population: 100,
+    staff: 0,
+    staffCost: 300,
+    stats: { env: 80, security: 80, health: 80 },
+    wasteRate: 0,
+    inventory: [],
+    player: {
+      lv: 1, xp: 0, next: 50,
+      hp: 100, maxHp: 100,
+      baseAtk: 12,
+      baseDef: 0,
+      baseSpd: 5,
+      baseLuk: 5,
+      drinks: 1,
+      bagId: 'bag_s'
+    },
+    loot: { cur: 0, max: 100 },
+    distance: 0,
+    enemy: null,
+    battle: { isPlayerTurn: false, isAnimating: false, defending: false },
+    lastTick: Date.now(),
+    lastDisasterAt: 0,
+    placing: { active: false, type: null },
+    dungeon: { bossSpawned: false, bossDefeated: false },
+
+    supports: {
+      inventory: [],
+      slots: { slot1: null, slot2: null, slot3: null }
+    },
+
+    _supportMigrated_v2: false
+  };
+
+  const DISASTER_COOLDOWN_MS = 30_000;
+  const ARSON_POP_LOSS_RATE = 0.03;
+  const THEFT_MONEY_LOSS_RATE = 0.03;
+  const DISEASE_POP_LOSS_RATE = 0.02;
+
+  const FACILITY_COST  = { hospital: 2500, police: 6000, fire: 6000 };
+  const FACILITY_LIMIT = { hospital: 5, police: 99, fire: 99 };
+
+  const POP_LOSS_BY_BUILDING = { hut: 10, house: 20, apt: 35, big: 50, park: 0, tree: 0 };
+
+  function ensureSupportState() {
+    if (!state.supports) state.supports = { inventory: [], slots: { slot1: null, slot2: null, slot3: null } };
+    if (!state.supports.inventory) state.supports.inventory = [];
+    if (!state.supports.slots) state.supports.slots = { slot1: null, slot2: null, slot3: null };
+  }
+
+  function migrateSupportsIfNeeded() {
+    if (!state._supportMigrated_v2) {
+      state.supports = { inventory: [], slots: { slot1: null, slot2: null, slot3: null } };
+      state._supportMigrated_v2 = true;
+    }
+  }
+
+  function getSupportUnit(uid) {
+    ensureSupportState();
+    return state.supports.inventory.find(u => u.uid === uid) || null;
+  }
+
+  function getEquippedSupports() {
+    ensureSupportState();
+    const ids = Object.values(state.supports.slots).filter(Boolean);
+    return ids.map(getSupportUnit).filter(Boolean);
+  }
+
+  function calcSupportBonus() {
+    ensureSupportState();
+    const units = getEquippedSupports();
+    let b = { atk: 0, def: 0, spd: 0, maxHp: 0 };
+
+    for (const u of units) {
+      const m = SUPPORT_MASTER[u.masterId];
+      if (!m) continue;
+
+      const rarity = u.rarity ?? 1;
+      const rMul = RARITY_MULT[rarity] ?? 1.0;
+
+      const level = u.level ?? 1;
+      const lvMul = 1 + Math.max(0, level - 1) * 0.06;
+
+      const dupes = u.dupes ?? 0;
+      const rate = DUPE_RATE[rarity] ?? 0;
+      const dupeMul = 1 + (dupes * rate);
+
+      const mul = rMul * lvMul * dupeMul;
+
+      b.atk   += Math.floor((m.base.atk   ?? 0) * mul);
+      b.def   += Math.floor((m.base.def   ?? 0) * mul);
+      b.spd   += Math.floor((m.base.spd   ?? 0) * mul);
+      b.maxHp += Math.floor((m.base.maxHp ?? 0) * mul);
+    }
+    return b;
+  }
+
+  function countFacility(type) {
+    const id = type === 'hospital' ? BLD_HOSPITAL : type === 'police' ? BLD_POLICE : BLD_FIRE;
+    let c = 0;
+    for (let y = 0; y < TOWN_H; y++) for (let x = 0; x < TOWN_W; x++) {
+      if (buildingMap[y][x] === id) c++;
+    }
+    return c;
+  }
+
+  function getFacilityEffects() {
+    const p = countFacility('police');
+    const f = countFacility('fire');
+    const h = countFacility('hospital');
+
+    const securityRegen = Math.min(1.2, 0.15 * p);
+    const crimeReduce   = Math.min(0.75, 0.18 * p);
+    const fireSuccessChance = Math.min(0.90, 0.25 + 0.18 * f);
+    const healthRegen = Math.min(1.0, 0.18 * h);
+    const diseaseReduce = Math.min(0.70, 0.15 * h);
+
+    return { securityRegen, crimeReduce, fireSuccessChance, healthRegen, diseaseReduce };
+  }
+
+  function selectFacilityToPlace(type) {
+    const limit = FACILITY_LIMIT[type] ?? 99;
+    if (countFacility(type) >= limit) {
+      openModal(`${type === 'hospital' ? '病院' : type === 'police' ? '警察署' : '消防署'}は上限（${limit}）に達しています。`);
+      return;
+    }
+    const cost = FACILITY_COST[type] ?? 0;
+    if (state.money < cost) {
+      openModal("資金が足りません。");
+      return;
+    }
+
+    state.placing.active = true;
+    state.placing.type = type;
+    document.getElementById('place-hint').classList.remove('hidden');
+    logMessage(`設置モード：${type === 'hospital' ? '🏥病院' : type === 'police' ? '🚓警察署' : '🚒消防署'}。置く場所をタップしてください。`);
+  }
+
+  function cancelPlacing() {
+    state.placing.active = false;
+    state.placing.type = null;
+    document.getElementById('place-hint').classList.add('hidden');
+  }
+
+  function isRoad(x, y) { return townMap?.[y]?.[x] === TILE_ROAD; }
+
+  function popLossByExistingBuildingId(id) {
+    if (id === BLD_HUT) return POP_LOSS_BY_BUILDING.hut;
+    if (id === BLD_HOUSE) return POP_LOSS_BY_BUILDING.house;
+    if (id === BLD_APT) return POP_LOSS_BY_BUILDING.apt;
+    if (id === BLD_BIG) return POP_LOSS_BY_BUILDING.big;
+    if (id === BLD_PARK) return POP_LOSS_BY_BUILDING.park;
+    if (id === BLD_TREE) return POP_LOSS_BY_BUILDING.tree;
+    return 0;
+  }
+
+  function placeFacilityAt(x, y) {
+    if (!state.placing.active) return;
+    if (x < 0 || x >= TOWN_W || y < 0 || y >= TOWN_H) return;
+
+    if (isRoad(x, y)) {
+      logMessage("道路には置けません。別のマスをタップしてください。");
+      return;
+    }
+
+    const type = state.placing.type;
+    const cost = FACILITY_COST[type] ?? 0;
+
+    const limit = FACILITY_LIMIT[type] ?? 99;
+    if (countFacility(type) >= limit) { openModal("上限に達しています。"); cancelPlacing(); return; }
+    if (state.money < cost) { openModal("資金が足りません。"); cancelPlacing(); return; }
+
+    const existing = buildingMap[y][x];
+    if (existing !== BLD_EMPTY && !isFacilityTile(existing)) {
+      const loss = popLossByExistingBuildingId(existing);
+      state.population = Math.max(10, state.population - loss);
+      logMessage(`建て替え：既存建物が消失… 人口 -${loss}`);
+    }
+
+    const id = type === 'hospital' ? BLD_HOSPITAL : type === 'police' ? BLD_POLICE : BLD_FIRE;
+    state.money -= cost;
+    buildingMap[y][x] = id;
+
+    logMessage(`${type === 'hospital' ? '🏥 病院' : type === 'police' ? '🚓 警察署' : '🚒 消防署'}を設置しました！`);
+    cancelPlacing();
+    updateUI();
+  }
+
+  canvas.addEventListener('pointerdown', (ev) => {
+    // ✅ 施設配置は「街タブ」かつ「mode=town」のときだけ反応
+    if (state.uiTab !== 'town') return;
+    if (state.mode !== 'town') return;
+    if (!state.placing.active) return;
+
+    const rect = canvas.getBoundingClientRect();
+    const cx = ev.clientX - rect.left;
+    const cy = ev.clientY - rect.top;
+
+    const geo = getTownDrawGeo();
+    if (!geo) return;
+    const { ox, oy, tileDrawSize, mapWpx, mapHpx } = geo;
+
+    if (cx < ox || cy < oy || cx >= ox + mapWpx || cy >= oy + mapHpx) return;
+
+    const x = Math.floor((cx - ox) / tileDrawSize);
+    const y = Math.floor((cy - oy) / tileDrawSize);
+
+    placeFacilityAt(x, y);
+  });
+
+  const PLAYER_SPR = {
+    get img(){ return ASSETS.player.img; },
+    get ready(){ return ASSETS.player.ok; },
+    cols: 5,
+    frameW: 0,
+    frameH: 0,
+    scale: 2.8,
+    flipX: true
+  };
+
+  function setupPlayerSpriteMeta() {
+    if (!PLAYER_SPR.ready || !PLAYER_SPR.img) return;
+    PLAYER_SPR.frameW = Math.floor(PLAYER_SPR.img.width / PLAYER_SPR.cols);
+    PLAYER_SPR.frameH = PLAYER_SPR.img.height;
+  }
+
+  function drawPlayerFrame(frameIndex, x, y) {
+    if (!PLAYER_SPR.ready || !PLAYER_SPR.img || !PLAYER_SPR.frameW || !PLAYER_SPR.frameH) return;
+    const fw = PLAYER_SPR.frameW;
+    const fh = PLAYER_SPR.frameH;
+    const sx = frameIndex * fw;
+    const sy = 0;
+    const dw = fw * PLAYER_SPR.scale;
+    const dh = fh * PLAYER_SPR.scale;
+
+    ctx.save();
+    ctx.imageSmoothingEnabled = false;
+    if (PLAYER_SPR.flipX) {
+      ctx.translate(x + dw, y);
+      ctx.scale(-1, 1);
+      ctx.drawImage(PLAYER_SPR.img, sx, sy, fw, fh, 0, 0, dw, dh);
+    } else {
+      ctx.drawImage(PLAYER_SPR.img, sx, sy, fw, fh, x, y, dw, dh);
+    }
+    ctx.restore();
+  }
+
+  const playerAnim = { walkUntil: 0, attackUntil: 0 };
+  function playWalk(ms = 450)   { playerAnim.walkUntil = Date.now() + ms; }
+  function playAttack(ms = 260) { playerAnim.attackUntil = Date.now() + ms; }
+  function getPlayerFrame() {
+    const now = Date.now();
+    if (now < playerAnim.attackUntil) return 4;
+    if (now < playerAnim.walkUntil) return Math.floor(now / 140) % 4;
+    return 0;
+  }
+
+  // ==============================
+  // Data（壊れていた箇所を修正済み）
+  // ==============================
+  const BASE_SHOP_ITEMS = [
+    { id: 'tong1',  name: '錆びたトング', type: 'atk', val: 5,   price: 500,   req: 0,   icon: '🥢', category: 'gear' },
+    { id: 'glove1', name: '軍手',         type: 'spd', val: 3,   price: 800,   req: 100, icon: '🧤', category: 'gear' },
+    { id: 'pad1',   name: '防護パッド',   type: 'def', val: 8,   price: 2500,  req: 120, icon: '🛡️', category: 'gear' },
+    { id: 'tong2',  name: 'チタントング', type: 'atk', val: 15,  price: 2000,  req: 150, icon: '🥢', category: 'gear' },
+    { id: 'suit',   name: '防護スーツ',   type: 'hp',  val: 250, price: 18000, req: 600, icon: '🥋', category: 'gear' },
+
+    { id: 'bag_s',  name: 'ゴミ袋(小)',     price: 0,     req: 0,   icon: '🗑️', category: 'bag', cap: 100 },
+    { id: 'bag_m',  name: 'ゴミ袋(中)',     price: 900,   req: 0,   icon: '🗑️', category: 'bag', cap: 180 },
+    { id: 'bag_l',  name: 'ゴミ袋(大)',     price: 2200,  req: 50,  icon: '🗑️', category: 'bag', cap: 260 },
+    { id: 'eco',    name: 'エコバッグ',     price: 1500,  req: 0,   icon: '🛍️', category: 'bag', cap: 140 },
+    { id: 'ruck',   name: 'リュックサック', price: 4800,  req: 100, icon: '🎒', category: 'bag', cap: 220 },
+    { id: 'mobile', name: '移動式ゴミ箱',   price: 12000, req: 200, icon: '🚮', category: 'bag', cap: 420 }
+  ];
+
+  const ENEMIES = [
+    { n: "荒ぶるレジ袋",      h: 40,  a: 10, s: 2,  x: 25,  e: '🛍️', imgKey: "enemy1", hpWeight: 0.35, atkWeight: 0.25 },
+    { n: "放置されたテレビ",  h: 120, a: 25, s: 6,  x: 90,  e: '📺', imgKey: "enemy2", hpWeight: 0.65, atkWeight: 0.45 },
+    { n: "粗大ゴミの塊",      h: 400, a: 50, s: 10, x: 350, e: '🧊', imgKey: "enemy3", hpWeight: 0.95, atkWeight: 0.65 }
+  ];
+
+  function saveGame() {
+    try { localStorage.setItem('ecoTownSave', JSON.stringify(state)); }
+    catch (e) { console.warn('Save failed', e); }
+  }
+
+  function loadGame() {
+    try {
+      const raw = localStorage.getItem('ecoTownSave');
+      if (!raw) return;
+      const loaded = JSON.parse(raw);
+      if (!loaded || !loaded.player || !loaded.stats) return;
+
+      state = loaded;
+
+      if (!state.lastTick) state.lastTick = Date.now();
+      if (!state.battle) state.battle = { isPlayerTurn: false, isAnimating: false, defending: false };
+      if (!state.inventory) state.inventory = [];
+      if (!state.staffCost) state.staffCost = 300;
+      if (!state.loot) state.loot = { cur: 0, max: 100 };
+      if (!state.player.bagId) state.player.bagId = 'bag_s';
+      if (!state.lastDisasterAt) state.lastDisasterAt = 0;
+      if (!state.placing) state.placing = { active: false, type: null };
+      if (!state.dungeon) state.dungeon = { bossSpawned: false, bossDefeated: false };
+      if (!state.uiTab) state.uiTab = 'town';
+      if (!state.mode) state.mode = 'town';
+
+      if (state.player.baseDef == null) state.player.baseDef = 0;
+
+      if (state._supportMigrated_v2 == null) state._supportMigrated_v2 = false;
+      migrateSupportsIfNeeded();
+      ensureSupportState();
+
+      if (state.supports?.inventory?.length) {
+        state.supports.inventory.forEach(u => {
+          if (u.dupes == null) u.dupes = 0;
+          if (u.level == null) u.level = 1;
+          if (u.exp == null) u.exp = 0;
+        });
+      }
+
+      ensureDefaultBagOwned();
+    } catch (e) {
+      console.warn('Load failed', e);
+    }
+  }
+
+  function enableAutoSave() { setInterval(saveGame, 5000); }
+
+  function ensureDefaultBagOwned() {
+    if (!state.inventory.some(i => i.id === 'bag_s')) state.inventory.push({ id: 'bag_s', plus: 0 });
+  }
+
+  function getEquippedBag() {
+    const id = state.player.bagId || 'bag_s';
+    return BASE_SHOP_ITEMS.find(i => i.id === id && i.category === 'bag') || BASE_SHOP_ITEMS.find(i => i.id === 'bag_s');
+  }
+
+  function updateLootMaxFromBag() {
+    ensureDefaultBagOwned();
+    const bag = getEquippedBag();
+    const cap = bag?.cap ?? 100;
+    state.loot.max = cap;
+    state.loot.cur = Math.min(state.loot.max, state.loot.cur);
+  }
+
+  function equipBag(id) {
+    const item = BASE_SHOP_ITEMS.find(i => i.id === id && i.category === 'bag');
+    if (!item) return;
+    if (!state.inventory.some(inv => inv.id === id)) return;
+
+    state.player.bagId = id;
+    updateLootMaxFromBag();
+    logMessage(`装備変更：${item.name}（容量 ${item.cap}）`);
+    updateUI();
+    refreshShop();
+  }
+
+  function getTownProgressLevel() {
+    if (state.population < 120) return 0;
+    if (state.population < 160) return 1;
+    if (state.population < 220) return 2;
+    if (state.population < 300) return 3;
+    return 4;
+  }
+
+  function applyTownGrowth() {
+    const lv = getTownProgressLevel();
+
+    townMap = Array.from({ length: TOWN_H }, () =>
+      Array.from({ length: TOWN_W }, () => TILE_GRASS)
+    );
+
+    const midY = Math.floor(TOWN_H / 2);
+    const midX = Math.floor(TOWN_W / 2);
+
+    for (let x = 0; x < TOWN_W; x++) townMap[midY][x] = TILE_ROAD;
+
+    if (lv >= 1) for (let y = 0; y < TOWN_H; y++) townMap[y][midX] = TILE_ROAD;
+
+    if (lv >= 2) {
+      const x1 = Math.max(1, midX - 4);
+      const x2 = Math.min(TOWN_W - 2, midX + 4);
+      for (let y = 0; y < TOWN_H; y++) {
+        townMap[y][x1] = TILE_ROAD;
+        townMap[y][x2] = TILE_ROAD;
+      }
+    }
+
+    if (lv >= 3) {
+      const y1 = Math.max(1, midY - 2);
+      const y2 = Math.min(TOWN_H - 2, midY + 2);
+      for (let x = 0; x < TOWN_W; x++) {
+        townMap[y1][x] = TILE_ROAD;
+        townMap[y2][x] = TILE_ROAD;
+      }
+    }
+
+    if (lv >= 4) {
+      townMap[1][1] = TILE_ROAD;
+      townMap[1][TOWN_W - 2] = TILE_ROAD;
+      townMap[TOWN_H - 2][1] = TILE_ROAD;
+      townMap[TOWN_H - 2][TOWN_W - 2] = TILE_ROAD;
+    }
+
+    applyBuildingGrowth();
+  }
+
+  function neighborsAreRoad(x, y) {
+    const dirs = [[1,0],[-1,0],[0,1],[0,-1]];
+    return dirs.some(([dx,dy]) => {
+      const nx = x + dx, ny = y + dy;
+      if (nx < 0 || nx >= TOWN_W || ny < 0 || ny >= TOWN_H) return false;
+      return townMap[ny][nx] === TILE_ROAD;
+    });
+  }
+
+  function getBuildingTierByPop(pop) {
+    if (pop < 140) return 0;
+    if (pop < 220) return 1;
+    if (pop < 320) return 2;
+    return 3;
+  }
+
+  function pickBuildingForTier(tier) {
+    const r = Math.random();
+    if (tier === 0) return BLD_HUT;
+    if (tier === 1) return (r < 0.75) ? BLD_HOUSE : BLD_APT;
+    if (tier === 2) {
+      if (r < 0.15) return BLD_HOUSE;
+      if (r < 0.80) return BLD_APT;
+      return BLD_BIG;
+    }
+    if (r < 0.25) return BLD_HOUSE;
+    if (r < 0.70) return BLD_APT;
+    return BLD_BIG;
+  }
+
+  function applyBuildingGrowth() {
+    for (let y = 0; y < TOWN_H; y++) for (let x = 0; x < TOWN_W; x++) {
+      if (townMap[y][x] === TILE_ROAD && !isFacilityTile(buildingMap[y][x])) buildingMap[y][x] = BLD_EMPTY;
+    }
+
+    const tier = getBuildingTierByPop(state.population);
+    const targetBuildings = Math.min((tier + 1) * 10, Math.floor(state.population / 25));
+
+    let current = 0;
+    for (let y = 0; y < TOWN_H; y++) for (let x = 0; x < TOWN_W; x++) {
+      if (townMap[y][x] !== TILE_ROAD && buildingMap[y][x] !== BLD_EMPTY && !isFacilityTile(buildingMap[y][x])) current++;
+    }
+
+    if (current < targetBuildings) {
+      const need = targetBuildings - current;
+      let placed = 0;
+
+      const candidatesNearRoad = [];
+      const candidatesAny = [];
+      for (let y = 0; y < TOWN_H; y++) for (let x = 0; x < TOWN_W; x++) {
+        if (townMap[y][x] === TILE_ROAD) continue;
+        if (buildingMap[y][x] !== BLD_EMPTY) continue;
+        (neighborsAreRoad(x,y) ? candidatesNearRoad : candidatesAny).push([x,y]);
+      }
+
+      function pick(list) {
+        if (list.length === 0) return null;
+        const i = Math.floor(Math.random() * list.length);
+        return list.splice(i,1)[0];
+      }
+
+      while (placed < need) {
+        const pos = pick(candidatesNearRoad) || pick(candidatesAny);
+        if (!pos) break;
+        const [x,y] = pos;
+
+        const env = state.stats.env;
+        const roll = Math.random();
+
+        if (env >= 85 && roll < 0.12) {
+          buildingMap[y][x] = (Math.random() < 0.5) ? BLD_TREE : BLD_PARK;
+        } else {
+          buildingMap[y][x] = pickBuildingForTier(tier);
+        }
+        placed++;
+      }
+    }
+
+    if (current > targetBuildings + 4) {
+      const removeCount = Math.min(3, current - targetBuildings);
+      let removed = 0;
+      for (let tries = 0; tries < 200 && removed < removeCount; tries++) {
+        const x = Math.floor(Math.random() * TOWN_W);
+        const y = Math.floor(Math.random() * TOWN_H);
+        if (townMap[y][x] === TILE_ROAD) continue;
+        if (buildingMap[y][x] === BLD_EMPTY) continue;
+        if (isFacilityTile(buildingMap[y][x])) continue;
+
+        if (buildingMap[y][x] === BLD_TREE && Math.random() < 0.7) continue;
+        buildingMap[y][x] = BLD_EMPTY;
+        removed++;
+      }
+    }
+  }
+
+  function getTownDrawGeo() {
+    const padding = 8;
+    const usableW = canvas.width - padding * 2;
+    const usableH = canvas.height - padding * 2;
+
+    const tileDrawSize = Math.floor(Math.min(usableW / TOWN_W, usableH / TOWN_H));
+    if (tileDrawSize <= 0) return null;
+
+    const mapWpx = tileDrawSize * TOWN_W;
+    const mapHpx = tileDrawSize * TOWN_H;
+
+    const ox = Math.floor((canvas.width - mapWpx) / 2);
+    const oy = Math.floor((canvas.height - mapHpx) / 2);
+    return { ox, oy, tileDrawSize, mapWpx, mapHpx };
+  }
+
+  function drawTownTiles() {
+    const geo = getTownDrawGeo();
+    if (!geo) return;
+    const { ox, oy, tileDrawSize } = geo;
+
+    for (let y = 0; y < TOWN_H; y++) {
+      for (let x = 0; x < TOWN_W; x++) {
+        const t = townMap[y][x];
+        const dx = ox + x * tileDrawSize;
+        const dy = oy + y * tileDrawSize;
+
+        if (t === TILE_ROAD) {
+          drawTileSheet(ROAD_TILES, 1, dx, dy, tileDrawSize, tileDrawSize, "#2a2a2a");
+        } else {
+          ctx.fillStyle = "#173a1d";
+          ctx.fillRect(dx, dy, tileDrawSize, tileDrawSize);
+        }
+
+        const b = buildingMap[y][x];
+        if (t !== TILE_ROAD && b !== BLD_EMPTY) {
+          if (isFacilityTile(b)) {
+            const civicId = civicTileIdOfBuildingId(b);
+            drawTileSheet(CIVIC_TILES, civicId, dx, dy, tileDrawSize, tileDrawSize, "#444");
+          } else {
+            drawTileSheet(BUILD_TILES, b, dx, dy, tileDrawSize, tileDrawSize, "#444");
+          }
+
+          if (infected[y][x] > 0) {
+            ctx.save();
+            ctx.globalAlpha = 0.85;
+            ctx.font = `${Math.floor(tileDrawSize * 0.9)}px 'DotGothic16', monospace`;
+            ctx.textAlign = "center";
+            ctx.textBaseline = "middle";
+            ctx.fillText("☣", dx + tileDrawSize / 2, dy + tileDrawSize / 2);
+            ctx.restore();
+          }
+        }
+      }
+    }
+  }
+
+  function waste01() {
+    const wr = state?.wasteRate ?? 0;
+    return clamp(wr / ENEMY_WASTE_SCALE_MAX, 0, 1);
+  }
+  function getEnemyBoost(enemyBase) {
+    const w = waste01();
+    const hpBoost  = 1 + (ENEMY_HP_BOOST_MAX  * w * (enemyBase.hpWeight ?? 0.55));
+    const atkBoost = 1 + (ENEMY_ATK_BOOST_MAX * w * (enemyBase.atkWeight ?? 0.35));
+    return { w, hpBoost, atkBoost };
+  }
+  function spawnEnemy(enemyBase) {
+    const boost = getEnemyBoost(enemyBase);
+    const maxH = Math.max(1, Math.floor(enemyBase.h * boost.hpBoost));
+    const a    = Math.max(1, Math.floor(enemyBase.a * boost.atkBoost));
+    return { ...enemyBase, maxH, curH: maxH, a, boost };
+  }
+
+  function simulateCityTick({ isOffline = false } = {}) {
+    const eff = getFacilityEffects();
+
+    state.wasteRate += state.population / 400;
+
+    let clean = state.staff * 0.9;
+    if (!isOffline && state.mode !== 'town') clean *= 2.0;
+    state.wasteRate = Math.max(0, state.wasteRate - clean);
+
+    if (state.wasteRate > 5.0) state.stats.env -= 0.5;
+    else if (state.wasteRate < 1.0) state.stats.env += 0.3;
+
+    if (state.wasteRate > 4.0) {
+      state.stats.security -= 0.35;
+      state.stats.health   -= 0.25;
+    } else if (state.wasteRate < 1.2) {
+      state.stats.security += 0.15;
+      state.stats.health   += 0.15;
+    }
+
+    state.stats.security += eff.securityRegen;
+    state.stats.health   += eff.healthRegen;
+
+    if (state.wasteRate > 12) state.population = Math.max(10, state.population - 4);
+    else if (state.wasteRate > 6) state.population = Math.max(10, state.population - 2);
+
+    if (state.stats.env > 80) state.population += Math.floor(state.population * 0.01) + 1;
+    else if (state.stats.env < 40) state.population = Math.max(10, state.population - 2);
+
+    let incomeMul = 1.0;
+    if (state.stats.security < 40) incomeMul *= 0.8;
+    if (state.stats.health   < 40) incomeMul *= 0.85;
+    state.money += Math.floor(state.population * 0.2 * incomeMul);
+
+    Object.keys(state.stats).forEach(k => state.stats[k] = clamp(state.stats[k], 0, 100));
+
+    for (let y = 0; y < TOWN_H; y++) for (let x = 0; x < TOWN_W; x++) {
+      if (infected[y][x] > 0) infected[y][x] = Math.max(0, infected[y][x] - 1);
+    }
+  }
+
+  function applyOfflineProgress() {
+    const now  = Date.now();
+    const last = state.lastTick || now;
+    let diffSec = Math.floor((now - last) / 1000);
+    diffSec = Math.max(0, Math.min(diffSec, 12 * 60 * 60));
+    for (let i = 0; i < diffSec; i++) {
+      simulateCityTick({ isOffline: true });
+      applyTownGrowth();
+    }
+    state.lastTick = now;
+  }
+
+  function mainLoopTick() {
+    simulateCityTick({ isOffline: false });
+    state.lastTick = Date.now();
+    applyTownGrowth();
+    updateUI();
+    if (document.getElementById('tab-shop')?.classList.contains('active')) refreshShop();
+  }
+
+  function getPlayerStats() {
+    let bonus = { atk: 0, def: 0, spd: 0, luk: 0, hp: 0 };
+
+    state.inventory.forEach(inv => {
+      const base = BASE_SHOP_ITEMS.find(i => i.id === inv.id);
+      if (!base) return;
+      if (base.category === 'bag') return;
+
+      const mul = 1 + ((inv.plus ?? 0) * 0.2);
+      if (base.type) {
+        if (bonus[base.type] == null) bonus[base.type] = 0;
+        bonus[base.type] += Math.floor((base.val || 0) * mul);
+      }
+    });
+
+    const s = calcSupportBonus();
+
+    return {
+      atk: state.player.baseAtk + bonus.atk + s.atk,
+      def: state.player.baseDef + bonus.def + s.def,
+      spd: state.player.baseSpd + bonus.spd + s.spd,
+      luk: state.player.baseLuk + bonus.luk,
+      maxHp: state.player.maxHp + bonus.hp + s.maxHp
+    };
+  }
+
+  function updateUI() {
+    ensureSupportState();
+    updateLootMaxFromBag();
+    updateAssetStatus();
+
+    const ps = getPlayerStats();
+    state.player.hp = clamp(state.player.hp, 0, ps.maxHp);
+
+    document.getElementById('ui-money').innerText = Math.floor(state.money).toLocaleString();
+    document.getElementById('ui-pop').innerText   = Math.floor(state.population);
+    document.getElementById('ui-waste').innerText = state.wasteRate.toFixed(1);
+
+    document.getElementById('bar-env').style.width  = `${state.stats.env}%`;
+    document.getElementById('bar-sec').style.width  = `${state.stats.security}%`;
+    document.getElementById('bar-heal').style.width = `${state.stats.health}%`;
+
+    document.getElementById('val-env').innerText  = Math.floor(state.stats.env);
+    document.getElementById('val-sec').innerText  = Math.floor(state.stats.security);
+    document.getElementById('val-heal').innerText = Math.floor(state.stats.health);
+
+    document.getElementById('st-atk').innerText = ps.atk;
+    document.getElementById('st-def').innerText = ps.def;
+    document.getElementById('st-spd').innerText = ps.spd;
+    document.getElementById('st-luk').innerText = ps.luk;
+
+    const hpPercent = ps.maxHp > 0 ? (state.player.hp / ps.maxHp) * 100 : 0;
+    document.getElementById('ui-hp-text').innerText = `${Math.ceil(state.player.hp)}/${ps.maxHp}`;
+    document.getElementById('hp-bar').style.width   = `${hpPercent}%`;
+
+    document.getElementById('battle-player-hp-bar').style.width = `${hpPercent}%`;
+    document.getElementById('battle-player-hp-text').innerText  = `${Math.ceil(state.player.hp)}/${ps.maxHp}`;
+
+    document.getElementById('ui-lv').innerText = state.player.lv;
+    document.getElementById('ui-xp').innerText = Math.max(0, state.player.next - state.player.xp);
+
+    const btnDrink = document.getElementById('btn-drink');
+    if (btnDrink) btnDrink.innerText = `🧪 ボトル(${state.player.drinks})`;
+
+    document.getElementById('staff-cost').innerText = `${state.staffCost}G`;
+
+    document.getElementById('ui-clean').innerText = (state.staff * 0.9).toFixed(1);
+    document.getElementById('ui-staff').innerText = state.staff;
+
+    const lootCur = state.loot?.cur ?? 0;
+    const lootMax = state.loot?.max ?? 100;
+    const lootPct = lootMax > 0 ? (lootCur / lootMax) * 100 : 0;
+    document.getElementById('ui-loot').innerText = Math.floor(lootCur);
+    document.getElementById('ui-loot-max').innerText = Math.floor(lootMax);
+    document.getElementById('loot-bar').style.width = `${clamp(lootPct,0,100)}%`;
+
+    const bag = getEquippedBag();
+    document.getElementById('ui-bag-name').innerText = bag ? `${bag.name}（${bag.cap}）` : '-';
+
+    document.getElementById('place-hint').classList.toggle('hidden', !state.placing.active);
+
+    const enemyHpText = document.getElementById('enemy-hp-text');
+    if (enemyHpText) {
+      if (state.mode === 'battle' && state.enemy) {
+        enemyHpText.innerText = `${Math.max(0, Math.ceil(state.enemy.curH))}/${Math.max(1, Math.ceil(state.enemy.maxH))}`;
+      } else {
+        enemyHpText.innerText = `0/0`;
+      }
+    }
+
+    // ✅ ナビ見た目（任意）
+    setActiveNav(state.uiTab);
+  }
+
+  function setActiveNav(tab) {
+    const ids = ["town","shop","explore"];
+    for (const t of ids) {
+      const btn = document.getElementById("nav-"+t);
+      if (!btn) continue;
+      btn.classList.toggle("bg-gray-200", tab === t);
+    }
+  }
+
+  // ✅ タブ切り替え：uiTabを更新（これで「開始ボタンがない/戻れない」系の混乱が減ります）
+  function showTab(t) {
+    // 遠征中（dungeon/battle）は、街/店へは移動不可（撤退してから）
+    if (state.mode !== 'town' && t !== 'explore') {
+      logMessage("遠征中は街/店に戻れません。『撤退』してください。");
+      return;
+    }
+
+    // 街/店に移動する時は配置モード解除
+    if (t !== 'town') cancelPlacing();
+
+    state.uiTab = t;
+
+    document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+    document.getElementById('tab-' + t).classList.add('active');
+
+    if (t === 'shop') refreshShop();
+    updateUI();
+  }
+
+  function startDungeon() {
+    cancelPlacing();
+    state.mode = 'dungeon';
+    state.uiTab = 'explore';
+
+    state.distance = 0;
+    state.loot.cur = 0;
+    state.dungeon = { bossSpawned: false, bossDefeated: false };
+
+    document.getElementById('ui-town-ctrl').classList.add('hidden');
+    document.getElementById('ui-dungeon-ctrl').classList.remove('hidden');
+    document.getElementById('ui-battle-ctrl').classList.add('hidden');
+    document.getElementById('battle-hud').classList.add('hidden');
+
+    playWalk(650);
+    logMessage("不法投棄エリアの探索を開始した。");
+    showTab('explore');
+    updateUI();
+  }
+
+  function dungeonStep() {
+    state.distance++;
+    state.player.hp -= 1;
+
+    if (!state.dungeon.bossDefeated && !state.dungeon.bossSpawned && state.distance >= BOSS_DISTANCE_STEP) {
+      logMessage("🚨 200m到達…救済ボスが出現した！");
+      startBattle({ isBoss: true });
+      updateUI();
+      return;
+    }
+
+    const gain = 6 + Math.floor(Math.random() * 8);
+    state.loot.cur = Math.min(state.loot.max, state.loot.cur + gain);
+
+    playWalk(450);
+
+    if (Math.random() < 0.3) startBattle();
+    else logMessage(`${state.distance}0m 地点。異常なし。`);
+
+    if (state.player.hp <= 0) {
+      openModal("遠征失敗！資金の一部を失いました。（回収も失います）");
+      state.money = Math.floor(state.money * 0.8);
+      state.loot.cur = 0;
+      state.player.hp = getPlayerStats().maxHp;
+      returnTown(true);
+    }
+
+    updateUI();
+  }
+
+  function startBattle({ isBoss = false } = {}) {
+    state.mode = 'battle';
+
+    let base;
+    if (isBoss) {
+      base = BOSS;
+      state.dungeon.bossSpawned = true;
+    } else {
+      const idx = Math.min(ENEMIES.length - 1, Math.floor(state.distance / 10));
+      base = ENEMIES[idx];
+    }
+
+    state.enemy = spawnEnemy(base);
+    state.enemy.isBoss = isBoss;
+
+    document.getElementById('ui-dungeon-ctrl').classList.add('hidden');
+    document.getElementById('ui-battle-ctrl').classList.remove('hidden');
+    document.getElementById('battle-hud').classList.remove('hidden');
+
+    const w = state.enemy.boost?.w ?? 0;
+    const suffix = isBoss ? "（救済ボス）" : (w >= 0.8 ? "（猛毒汚染）" : w >= 0.5 ? "（汚染）" : w >= 0.25 ? "（軽汚染）" : "");
+    document.getElementById('enemy-name').innerText = `${isBoss ? "BOSS：" : ""}${state.enemy.n}${suffix}`;
+
+    const hpBar = document.getElementById('enemy-hp-bar');
+    hpBar.style.transition = 'none';
+    hpBar.style.width = '100%';
+    hpBar.offsetHeight;
+    hpBar.style.transition = '';
+
+    const ps = getPlayerStats();
+    if (ps.spd >= state.enemy.s) {
+      state.battle.isPlayerTurn = true;
+      logMessage(isBoss ? "ボス戦！あなたの先制攻撃！" : "あなたの先制攻撃！");
+    } else {
+      state.battle.isPlayerTurn = false;
+      setTimeout(enemyTurn, 800);
+    }
+
+    updateUI();
+  }
+
+  function battleTurn(action) {
+    if (state.mode !== 'battle') return;
+    if (!state.battle.isPlayerTurn || state.battle.isAnimating) return;
+
+    const ps = getPlayerStats();
+
+    if (action === 'attack') {
+      playAttack(300);
+
+      const cc = critChance(ps.luk);
+      const isCrit = Math.random() < cc;
+      const dmg = isCrit ? Math.floor(ps.atk * 1.6) : ps.atk;
+
+      state.enemy.curH -= dmg;
+      createFloatingText(isCrit ? `CRIT! -${dmg}` : `-${dmg}`, "#fff", 60);
+      logMessage(isCrit ? `${state.enemy.n}にクリティカル！` : `${state.enemy.n}にダメージ！`);
+    } else if (action === 'defend') {
+      state.battle.defending = true;
+      logMessage("身を護っている...（次の被ダメ軽減UP）");
+    } else if (action === 'heal') {
+      if (state.player.drinks > 0) {
+        state.player.drinks--;
+        state.player.hp = Math.min(ps.maxHp, state.player.hp + 100);
+        logMessage("ボトルで回復した！");
+      } else {
+        logMessage("ボトルがない！");
+        return;
+      }
+    } else if (action === 'flee') {
+      if (Math.random() < 0.5) { endBattle({ won: false }); return; }
+      logMessage("逃げられなかった！");
+    }
+
+    state.enemy.curH = Math.max(0, state.enemy.curH);
+    document.getElementById('enemy-hp-bar').style.width = `${(state.enemy.curH / state.enemy.maxH) * 100}%`;
+
+    if (state.enemy.curH <= 0) {
+      const lootBonus = Math.floor(ps.atk * 0.05) + Math.floor(ps.luk * 0.2);
+      const lootReward = Math.floor(state.enemy.maxH * 0.8 + (Math.random() * 8)) + lootBonus;
+
+      gainXp(state.enemy.x);
+      endBattle({ won: true, lootReward, isBoss: !!state.enemy?.isBoss });
+    } else {
+      state.battle.isPlayerTurn = false;
+      setTimeout(enemyTurn, 800);
+    }
+
+    updateUI();
+  }
+
+  function enemyTurn() {
+    if (state.mode !== 'battle') return;
+
+    const ps = getPlayerStats();
+
+    const dc = dodgeChance(ps.spd, state.enemy.s);
+    if (Math.random() < dc) {
+      createFloatingText("MISS!", "#6ee7b7", 40);
+      logMessage(`${state.enemy.n}の攻撃！…しかし避けた！`);
+      state.battle.isPlayerTurn = true;
+      updateUI();
+      return;
+    }
+
+    const raw = state.enemy.a;
+    const effDef = state.battle.defending ? ps.def * 2 : ps.def;
+    const dmg = reduceDamage(raw, effDef);
+
+    state.battle.defending = false;
+    state.player.hp -= dmg;
+
+    createFloatingText(`-${dmg}`, "#f00", 40);
+    logMessage(`${state.enemy.n}の攻撃！`);
+
+    if (state.player.hp <= 0) {
+      openModal("遠征失敗！資金の一部を失いました。（回収も失います）");
+      state.money = Math.floor(state.money * 0.8);
+      state.loot.cur = 0;
+      state.player.hp = getPlayerStats().maxHp;
+      returnTown(true);
+      return;
+    }
+
+    state.battle.isPlayerTurn = true;
+    updateUI();
+  }
+
+  function animateLootGain(amount, duration = 900) {
+    const from = Number(state.loot.cur || 0);
+    const to = Math.min(state.loot.max, from + amount);
+    const start = performance.now();
+
+    function step(now) {
+      const t = Math.min(1, (now - start) / duration);
+      state.loot.cur = from + (to - from) * t;
+      updateUI();
+      if (t < 1) requestAnimationFrame(step);
+      else { state.loot.cur = to; updateUI(); }
+    }
+    requestAnimationFrame(step);
+  }
+
+  function endBattle(result = { won: false, lootReward: 0, isBoss: false }) {
+    if (result.won && result.isBoss) {
+      document.getElementById('ui-battle-ctrl').classList.add('hidden');
+      document.getElementById('battle-hud').classList.add('hidden');
+
+      if (result.lootReward > 0) {
+        logMessage(`ボス撃破！回収！ +${result.lootReward}`);
+        animateLootGain(result.lootReward, 900);
+      } else {
+        logMessage("ボス撃破！");
+      }
+
+      const before = state.wasteRate;
+      state.wasteRate = Math.max(0, state.wasteRate * (1 - BOSS_WASTE_REDUCE_RATE));
+      const reduced = before - state.wasteRate;
+
+      state.dungeon.bossDefeated = true;
+      state.enemy = null;
+
+      setTimeout(() => {
+        logMessage(`👑 救済発動：街のゴミ -30%（-${reduced.toFixed(1)}）→ 強制帰還`);
+        returnTown(false);
+        updateUI();
+      }, 650);
+
+      return;
+    }
+
+    state.mode = 'dungeon';
+    document.getElementById('ui-battle-ctrl').classList.add('hidden');
+    document.getElementById('ui-dungeon-ctrl').classList.remove('hidden');
+    document.getElementById('battle-hud').classList.add('hidden');
+
+    if (result.won && result.lootReward > 0) {
+      logMessage(`戦闘終了。回収！ +${result.lootReward}`);
+      animateLootGain(result.lootReward, 900);
+    } else {
+      logMessage("戦闘終了。探索を再開します。");
+    }
+
+    state.enemy = null;
+    playWalk(650);
+    updateUI();
+  }
+
+  function gainXp(amt) {
+    state.player.xp += amt;
+    if (state.player.xp >= state.player.next) {
+      state.player.lv++;
+      state.player.xp = 0;
+      state.player.next = Math.floor(state.player.next * 1.5);
+
+      state.player.maxHp += 20;
+      state.player.baseAtk += 5;
+      state.player.baseDef += 3;
+      state.player.baseSpd += 1;
+      state.player.baseLuk += 1;
+
+      state.player.hp = getPlayerStats().maxHp;
+      openModal(`LEVEL UP! LV.${state.player.lv}になった！\nATK+5 DEF+3 SPD+1 LUK+1 HP+20`);
+    }
+  }
+
+  function applyReturnCleanup(lootAmount) {
+    const reduced = lootAmount * CITY_WASTE_REDUCTION_PER_LOOT;
+    state.wasteRate = Math.max(0, state.wasteRate - reduced);
+    return reduced;
+  }
+
+  function returnTown(isForced = false) {
+    if (!isForced && state.loot && state.loot.cur > 0) {
+      const lootAmount = Math.floor(state.loot.cur);
+      const reward = Math.floor(lootAmount * MONEY_PER_LOOT);
+      state.money += reward;
+
+      const reduced = applyReturnCleanup(lootAmount);
+      logMessage(`帰還：換金 +${reward}G / 街のゴミ -${reduced.toFixed(1)}`);
+      state.loot.cur = 0;
+    } else {
+      state.loot.cur = 0;
+      logMessage("撤退しました。");
+    }
+
+    state.mode = 'town';
+
+    document.getElementById('ui-town-ctrl').classList.remove('hidden');
+    document.getElementById('ui-dungeon-ctrl').classList.add('hidden');
+    document.getElementById('ui-battle-ctrl').classList.add('hidden');
+    document.getElementById('battle-hud').classList.add('hidden');
+
+    showTab('town');
+    updateUI();
+    refreshShop();
+  }
+
+  function refreshShop() {
+    const container = document.getElementById('shop-items');
+    if (!container) return;
+
+    ensureDefaultBagOwned();
+    container.innerHTML = '';
+
+    BASE_SHOP_ITEMS.forEach(item => {
+      const isUnlocked = state.population >= (item.req || 0);
+      const isOwned = state.inventory.some(i => i.id === item.id);
+      const isBag = item.category === 'bag';
+      const isEquipped = isBag && (state.player.bagId === item.id);
+
+      let labelRight = '';
+      let btnClass = "btn-action w-full flex justify-between items-center";
+
+      if (isBag) {
+        if (!isUnlocked) {
+          btnClass += " disabled";
+          labelRight = `人口${item.req}必要`;
+        } else if (!isOwned) {
+          if (state.money < item.price) btnClass += " disabled";
+          labelRight = `${item.price}G`;
+        } else {
+          labelRight = isEquipped ? "装備中" : "所持(タップで装備)";
+        }
+      } else {
+        if (!isUnlocked || isOwned || state.money < item.price) btnClass += " disabled";
+        labelRight = isOwned ? "所持中" : `${item.price}G`;
+      }
+
+      const leftText = isBag ? `${item.icon} ${item.name}（容量${item.cap}）` : `${item.icon} ${item.name}`;
+      const onclick = isBag ? (!isOwned ? `buyItem('${item.id}')` : `equipBag('${item.id}')`) : `buyItem('${item.id}')`;
+
+      const div = document.createElement('div');
+      div.innerHTML = `<button onclick="${onclick}" class="${btnClass}">
+        <span>${leftText}</span>
+        <span>${labelRight}</span>
+      </button>`;
+      container.appendChild(div);
+    });
+  }
+
+  function buyItem(id) {
+    const item = BASE_SHOP_ITEMS.find(i => i.id === id);
+    if (!item) return;
+
+    const isOwned = state.inventory.some(i => i.id === id);
+    if (isOwned) return;
+
+    if (state.money >= (item.price || 0)) {
+      state.money -= (item.price || 0);
+      state.inventory.push({ id: id, plus: 0 });
+
+      if (item.category === 'bag') {
+        state.player.bagId = id;
+        updateLootMaxFromBag();
+        logMessage(`購入＆装備：${item.name}（容量 ${item.cap}）`);
+      } else {
+        logMessage(`購入：${item.name}`);
+      }
+
+      updateUI();
+      refreshShop();
+    }
+  }
+
+  function buyUpgrade(type) {
+    if (type === 'park' && state.money >= 1000) {
+      state.money -= 1000;
+      state.stats.env = Math.min(100, state.stats.env + 20);
+      logMessage("⛲ 公園整備：環境が改善した！");
+    } else if (type === 'medical' && state.money >= 2500) {
+      state.money -= 2500;
+      state.stats.health = Math.min(100, state.stats.health + 20);
+      logMessage("💊 医療投資：健康が改善した！");
+    }
+    updateUI();
+  }
+
+  function recruitStaff() {
+    if (state.money >= state.staffCost) {
+      state.money -= state.staffCost;
+      state.staff++;
+      state.staffCost = Math.floor(state.staffCost * 1.4);
+      logMessage("🧹 清掃員を雇用した！");
+      updateUI();
+    }
+  }
+
+  function useDrink() {
+    const ps = getPlayerStats();
+    if (state.player.drinks > 0 && state.player.hp < ps.maxHp) {
+      state.player.drinks--;
+      state.player.hp = Math.min(ps.maxHp, state.player.hp + 100);
+      updateUI();
+    }
+  }
+
+  function logMessage(m) {
+    const el = document.getElementById('game-log');
+    if (el) el.innerText = m;
+  }
+
+  function createFloatingText(t, c, x) {
+    const div = document.createElement('div');
+    div.innerText = t;
+    div.className = 'floating-text';
+    div.style.left = `${x}%`;
+    div.style.top = `40%`;
+    div.style.color = c;
+    document.getElementById('screen-container').appendChild(div);
+    setTimeout(() => div.remove(), 1200);
+  }
+
+  function openModal(txt) {
+    document.getElementById('modal-text').innerText = txt;
+    document.getElementById('custom-modal').style.display = 'flex';
+  }
+  function closeModal() {
+    document.getElementById('custom-modal').style.display = 'none';
+  }
+
+  function simulateAdReward() {
+    openModal("動画広告を視聴しました！ボーナスとして500G獲得！");
+    state.money += 500;
+    updateUI();
+  }
+
+  function draw() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    const env = state.stats.env / 100;
+    ctx.fillStyle = `rgb(${40 - (env * 20)}, ${50 + (env * 50)}, ${80 + (env * 50)})`;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    ctx.fillStyle = '#0d0d0d';
+    ctx.fillRect(0, 160, canvas.width, 40);
+
+    const px = Math.floor(canvas.width * 0.55);
+    const py = 200 - 40 - (PLAYER_SPR.ready ? (PLAYER_SPR.frameH * PLAYER_SPR.scale) : 0) + 18;
+
+    if (state.mode === 'town') {
+      drawTownTiles();
+      drawPlayerFrame(0, px, py);
+    } else if (state.mode === 'dungeon') {
+      ctx.fillStyle = "rgba(0,0,0,0.25)";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      drawPlayerFrame(getPlayerFrame(), px, py);
+    } else if (state.mode === 'battle' && state.enemy) {
+      ctx.fillStyle = "rgba(0,0,0,0.25)";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      drawEnemySprite(state.enemy, canvas.width * 0.30, 105);
+      drawPlayerFrame(getPlayerFrame(), px, py);
+    }
+  }
+
+  function gameLoop() {
+    draw();
+    requestAnimationFrame(gameLoop);
+  }
+
+  const GACHA_COST = 500;
+
+  const GACHA_POOL = [
+    { masterId: "yuzuki",   weight: 50 },
+    { masterId: "mirako",   weight: 45 },
+    { masterId: "fromzero", weight: 5  }
+  ];
+
+  function rollRarity() {
+    const r = Math.random();
+    if (r < 0.02) return 5;
+    if (r < 0.08) return 4;
+    if (r < 0.23) return 3;
+    if (r < 0.50) return 2;
+    return 1;
+  }
+
+  function weightedPick(pool) {
+    const sum = pool.reduce((a,b)=>a+b.weight,0);
+    let r = Math.random() * sum;
+    for (const p of pool) { r -= p.weight; if (r <= 0) return p.masterId; }
+    return pool[pool.length-1].masterId;
+  }
+
+  function openGachaModal() {
+    ensureSupportState();
+    document.getElementById("gacha-modal").style.display = "flex";
+    document.getElementById("gacha-result").innerText = "結果はここに表示されます";
+  }
+  function closeGachaModal() {
+    document.getElementById("gacha-modal").style.display = "none";
+  }
+
+  function openSupportModal() {
+    ensureSupportState();
+    renderSupportUI();
+    document.getElementById("support-modal").style.display = "flex";
+  }
+  function closeSupportModal() {
+    document.getElementById("support-modal").style.display = "none";
+  }
+
+  function autoEquipIfEmpty(uid) {
+    const s = state.supports.slots;
+    if (!s.slot1) { s.slot1 = uid; return true; }
+    if (!s.slot2) { s.slot2 = uid; return true; }
+    if (!s.slot3) { s.slot3 = uid; return true; }
+    return false;
+  }
+
+  function doGachaOnce() {
+    ensureSupportState();
+
+    if (state.money < GACHA_COST) {
+      document.getElementById("gacha-result").innerText = "資金が足りません。";
+      return;
+    }
+    state.money -= GACHA_COST;
+
+    const masterId = weightedPick(GACHA_POOL);
+    const rarity = rollRarity();
+
+    const existing = state.supports.inventory.find(u =>
+      u.masterId === masterId && u.rarity === rarity
+    );
+
+    const m = SUPPORT_MASTER[masterId];
+
+    const rate = DUPE_RATE[rarity] ?? 0;
+    const ratePct = Math.round(rate * 100);
+
+    if (existing) {
+      existing.dupes = (existing.dupes ?? 0) + 1;
+
+      document.getElementById("gacha-result").innerHTML =
+        `${rarityBadgeHTML(rarity, existing.dupes)} ${m.icon} ${m.name} がダブりました！<br>` +
+        `自然強化：全能力 <b>+${ratePct}%</b>（累計：${ratePct}% × ${existing.dupes}）`;
+    } else {
+      const uid = `s_${masterId}_${Date.now().toString(36)}_${Math.floor(Math.random()*999)}`;
+
+      state.supports.inventory.push({
+        uid, masterId, rarity, level: 1, exp: 0, dupes: 0
+      });
+
+      const equipped = autoEquipIfEmpty(uid);
+
+      document.getElementById("gacha-result").innerHTML =
+        `${rarityBadgeHTML(rarity, 0)} ${m.icon} ${m.name} を入手！${equipped ? "（自動装備）" : ""}`;
+    }
+
+    saveGame();
+    updateUI();
+    if (document.getElementById("support-modal").style.display === "flex") renderSupportUI();
+  }
+
+  function renderSupportUI() {
+    ensureSupportState();
+    const slots = state.supports.slots;
+
+    const nameOf = (uid)=>{
+      if (!uid) return "-";
+      const u = getSupportUnit(uid);
+      if (!u) return "-";
+      const m = SUPPORT_MASTER[u.masterId];
+      const dupes = u.dupes ?? 0;
+      return `${rarityText(u.rarity, dupes)} ${m.icon}${m.name}`;
+    };
+
+    document.getElementById("eq1").innerText = nameOf(slots.slot1);
+    document.getElementById("eq2").innerText = nameOf(slots.slot2);
+    document.getElementById("eq3").innerText = nameOf(slots.slot3);
+
+    const list = document.getElementById("support-list");
+    list.innerHTML = "";
+
+    if (!state.supports.inventory.length) {
+      list.innerHTML = `<div class="text-[10px] text-gray-300 border border-white/20 bg-black/30 p-2">
+        まだサポートがいません。<b>ガチャ</b>で入手してください。
+      </div>`;
+      return;
+    }
+
+    for (const u of state.supports.inventory.slice().reverse()) {
+      const m = SUPPORT_MASTER[u.masterId];
+      if (!m) continue;
+
+      const isEq = Object.values(slots).includes(u.uid);
+
+      const wrap = document.createElement("div");
+      wrap.className = "border border-white/20 bg-black/30 p-2";
+
+      const dupes = u.dupes ?? 0;
+      const pct = Math.round((DUPE_RATE[u.rarity] ?? 0) * 100);
+
+      wrap.innerHTML = `
+        <div class="flex justify-between items-center">
+          <div class="text-xs">
+            ${rarityBadgeHTML(u.rarity, dupes)} ${m.icon} <b>${m.name}</b> Lv.${u.level}
+            ${isEq ? `<span class="text-green-400">（装備中）</span>` : ``}
+            <div class="text-[10px] text-gray-300 mt-1">
+              ダブり強化：全能力 +${pct}% × ${dupes}
+            </div>
+          </div>
+        </div>
+        <div class="grid grid-cols-3 gap-2 mt-2">
+          <button class="btn-action" onclick="equipSupportToSlot('${u.uid}','slot1')">①装備</button>
+          <button class="btn-action" onclick="equipSupportToSlot('${u.uid}','slot2')">②装備</button>
+          <button class="btn-action" onclick="equipSupportToSlot('${u.uid}','slot3')">③装備</button>
+        </div>
+      `;
+      list.appendChild(wrap);
+    }
+  }
+
+  function equipSupportToSlot(uid, slotKey) {
+    ensureSupportState();
+    const u = getSupportUnit(uid);
+    if (!u) return;
+
+    state.supports.slots[slotKey] = uid;
+    saveGame();
+    updateUI();
+    renderSupportUI();
+  }
+
+  async function init() {
+    loadGame();
+
+    await loadAllAssets();
+    setupPlayerSpriteMeta();
+
+    ensureSupportState();
+    applyOfflineProgress();
+    enableAutoSave();
+
+    ensureDefaultBagOwned();
+    updateLootMaxFromBag();
+    applyTownGrowth();
+
+    setInterval(mainLoopTick, 1000);
+    gameLoop();
+
+    // 起動時に「街」を表示（必要なら explore に変えてください）
+    showTab(state.uiTab || 'town');
+
+    updateUI();
+    refreshShop();
+  }
+
+  window.onload = init;
+</script>
+
+</body>
 </html>
