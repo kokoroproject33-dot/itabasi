@@ -168,6 +168,21 @@
     <div class="relative overflow-hidden bg-black" id="screen-container">
       <canvas id="game-canvas"></canvas>
 
+      <!-- ✅ 世界崩壊フェーズ・オーバーレイ（キャンセル不可演出） -->
+      <div id="collapse-overlay" style="display:none; position:absolute; inset:0; z-index:2000; background:rgba(0,0,0,0.92); align-items:center; justify-content:center; padding:18px;">
+        <div class="bg-black/80 border-2 border-red-500 p-4 w-full max-w-sm text-center space-y-3">
+          <div class="text-red-400 font-bold text-sm">⚠ 世界崩壊フェーズ</div>
+          <div id="collapse-text" class="text-[11px] text-gray-200 leading-relaxed">
+            崩壊が始まりました。<br>
+            環境・治安・健康が急激に悪化します。<br>
+            立て直せるかどうか、今ここからです。
+          </div>
+          <div class="text-[10px] text-gray-400">
+            ※この警告は閉じられません（突入演出）
+          </div>
+        </div>
+      </div>
+
       <!-- 4ステ -->
       <div class="absolute top-2 left-2 bg-black/70 p-1 border border-white/50 text-[9px] z-20">
         ATK:<span id="st-atk">0</span>
@@ -234,6 +249,10 @@
         <button onclick="buyUpgrade('park')" class="btn-action w-full flex justify-between items-center">
           <span>⛲ 公園整備（環境+）</span><span class="text-yellow-400">1,000G</span>
         </button>
+        <button onclick="startPatrol()" class="btn-action w-full flex justify-between items-center">
+          <span>🚶 パトロール（治安+ / 一定時間ブースト）</span>
+          <span class="text-yellow-400" id="patrol-cost">400G</span>
+        </button>
         <button onclick="buyUpgrade('medical')" class="btn-action w-full flex justify-between items-center">
           <span>💊 医療投資（健康+）</span><span class="text-yellow-400">2,500G</span>
         </button>
@@ -247,7 +266,6 @@
         <button onclick="selectFacilityToPlace('fire')" class="btn-action w-full flex justify-between items-center">
           <span>🚒 消防署 設置</span><span class="text-yellow-400">6,000G</span>
         </button>
-
         <button onclick="recruitStaff()" class="btn-action w-full flex justify-between items-center">
           <span>🧹 清掃員雇用</span><span class="text-yellow-400" id="staff-cost">300G</span>
         </button>
@@ -261,8 +279,30 @@
 
       <!-- 装備/店 -->
       <div id="tab-shop" class="tab-content space-y-2">
-        <div class="text-[10px] border border-white/20 p-2 text-gray-200">
-          🧰 ゴミ袋系は「購入 → もう一度タップ」で装備できます（回収上限が変化）。
+        <div class="text-[10px] border border-white/20 p-2 text-gray-200 bg-black/30">
+          🧰 ゴミ袋系は「購入 → タップ」で装備できます（回収上限が変化）。<br>
+          ※装備/解除で効果が反映されます（購入しただけでは反映されません）。
+        </div>
+
+        <div class="text-[10px] border border-white/20 p-2 bg-black/30 space-y-2">
+          <div class="font-bold text-xs text-center">🧰 装備欄</div>
+          <div class="grid grid-cols-3 gap-2">
+            <div class="border border-white/20 p-2 text-center">
+              <div class="text-gray-300">武器</div>
+              <div id="eq-weapon" class="font-bold">-</div>
+            </div>
+            <div class="border border-white/20 p-2 text-center">
+              <div class="text-gray-300">手</div>
+              <div id="eq-hand" class="font-bold">-</div>
+            </div>
+            <div class="border border-white/20 p-2 text-center">
+              <div class="text-gray-300">胴</div>
+              <div id="eq-body" class="font-bold">-</div>
+            </div>
+          </div>
+          <div class="text-[9px] text-gray-300">
+            ※「装備/解除」で効果が反映されます（購入しただけでは反映されません）。
+          </div>
         </div>
 
         <button onclick="openGachaModal()" class="btn-action w-full flex justify-between items-center">
@@ -610,7 +650,6 @@
 
   const RARITY_MULT = { 1: 0.6, 2: 0.8, 3: 1.0, 4: 1.25, 5: 1.55 };
 
-  /* ✅ 追加反映：ゆづきATK15 / みらこ環境バリア&ドリンク / FromZero踏みとどまり */
   const SUPPORT_MASTER = {
     yuzuki: {
       name: "ゆづき",
@@ -635,13 +674,7 @@
     }
   };
 
-  const DUPE_RATE = {
-    1: 0.01,
-    2: 0.02,
-    3: 0.04,
-    4: 0.07,
-    5: 0.10
-  };
+  const DUPE_RATE = { 1: 0.01, 2: 0.02, 3: 0.04, 4: 0.07, 5: 0.10 };
 
   function rarityColor(r) {
     if (r === 1) return "#ffffff";
@@ -651,18 +684,15 @@
     if (r === 5) return "#ef4444";
     return "#ffffff";
   }
-
   function rarityText(r, dupes = 0) {
     const stars = "★".repeat(r);
     return dupes > 0 ? `${stars}+${dupes}` : stars;
   }
-
   function rarityBadgeHTML(r, dupes = 0) {
     const color = rarityColor(r);
     const txt = rarityText(r, dupes);
     return `<span style="color:${color}; font-weight:bold;">${txt}</span>`;
   }
-
   function getSupportSkillDisplayName(unit) {
     if (!unit) return "-";
     const m = SUPPORT_MASTER[unit.masterId];
@@ -690,7 +720,8 @@
       baseSpd: 5,
       baseLuk: 5,
       drinks: 1,
-      bagId: 'bag_s'
+      bagId: 'bag_s',
+      equip: { weapon: null, hand: null, body: null },
     },
     loot: { cur: 0, max: 100 },
     distance: 0,
@@ -699,8 +730,22 @@
     lastTick: Date.now(),
     lastDisasterAt: 0,
     placing: { active: false, type: null },
+    patrol: { until: 0 },
     dungeon: { bossSpawned: false, bossDefeated: false, zeroUsed: false },
 
+    // ✅ 世界崩壊フェーズ state
+    collapse: {
+  active: false,
+  enteredOnce: false,
+  overlayUntil: 0,
+  driftEventFired: false,
+  tutorialBossDefeated: false,
+  cooldownUntil: 0,
+
+  // ✅ 追加（新解除条件用）
+  recoverHoldMs: 0,
+  recoverLastAt: 0
+},
     supports: {
       inventory: [],
       slots: { slot1: null, slot2: null, slot3: null }
@@ -718,6 +763,245 @@
   const FACILITY_LIMIT = { hospital: 5, police: 99, fire: 99 };
 
   const POP_LOSS_BY_BUILDING = { hut: 10, house: 20, apt: 35, big: 50, park: 0, tree: 0 };
+
+  // =========================
+  // パトロール（治安ブースト）
+  // =========================
+  const PATROL_COST = 400;
+  const PATROL_DURATION_MS = 60_000; // 60秒
+  const PATROL_SECURITY_GAIN = 10;   // 即時治安+10
+  const PATROL_REGEN_BONUS = 0.8;    // 毎秒の治安回復+0.8（パトロール中）
+  const PATROL_CRIME_REDUCE_BONUS = 0.20;
+
+  function isPatrolActive() {
+    return (state.patrol?.until ?? 0) > Date.now();
+  }
+
+  function startPatrol() {
+    if (isPatrolActive()) {
+      const left = Math.ceil((state.patrol.until - Date.now()) / 1000);
+      logMessage(`🚶 パトロール中です（残り ${left}s）`);
+      updateUI();
+      return;
+    }
+
+    if (state.mode !== 'town' || state.uiTab !== 'town') {
+      logMessage("街にいる時だけパトロールできます。");
+      return;
+    }
+
+    if (state.money < PATROL_COST) {
+      openModal("資金が足りません。");
+      return;
+    }
+
+    state.money -= PATROL_COST;
+    state.patrol.until = Date.now() + PATROL_DURATION_MS;
+
+    state.stats.security = clamp(state.stats.security + PATROL_SECURITY_GAIN, 0, 100);
+
+    logMessage(`🚶 パトロール開始！治安 +${PATROL_SECURITY_GAIN}（60秒間ブースト）`);
+    updateUI();
+    saveGame();
+  }
+// ✅ 崩壊解除条件（新）
+// ゴミ1億以下 ＋ 環境/治安/健康30%以上 を一定時間保持
+const RECOVER_THRESHOLD = 30;
+const RECOVER_WASTE_MAX = 100_000_000;
+const RECOVER_HOLD_MS   = 30_000; // 30秒（好みで変更OK）
+  // =========================================================
+  // ✅ 世界崩壊フェーズ（実装）
+  // =========================================================
+  function ensureCollapseState() {
+  if (!state.collapse) {
+    state.collapse = {
+      active: false,
+      enteredOnce: false,
+      overlayUntil: 0,
+      driftEventFired: false,
+      tutorialBossDefeated: false,
+      cooldownUntil: 0,
+      recoverHoldMs: 0,
+      recoverLastAt: 0
+    };
+    return;
+  }
+
+  // 既存セーブ互換（古いセーブに項目が無い場合）
+  if (state.collapse.active == null) state.collapse.active = false;
+  if (state.collapse.enteredOnce == null) state.collapse.enteredOnce = false;
+  if (state.collapse.overlayUntil == null) state.collapse.overlayUntil = 0;
+  if (state.collapse.driftEventFired == null) state.collapse.driftEventFired = false;
+  if (state.collapse.tutorialBossDefeated == null) state.collapse.tutorialBossDefeated = false;
+  if (state.collapse.cooldownUntil == null) state.collapse.cooldownUntil = 0;
+
+  // 解除条件の保持タイマー（今回追加分）
+  if (state.collapse.recoverHoldMs == null) state.collapse.recoverHoldMs = 0;
+  if (state.collapse.recoverLastAt == null) state.collapse.recoverLastAt = 0;
+}
+
+  function showCollapseOverlay(ms = 2000) {
+    const el = document.getElementById("collapse-overlay");
+    if (!el) return;
+    el.style.display = "flex";
+    state.collapse.overlayUntil = Date.now() + ms;
+  }
+
+  function tickCollapseOverlay() {
+    const el = document.getElementById("collapse-overlay");
+    if (!el) return;
+    if (!state.collapse?.active) { el.style.display = "none"; return; }
+
+    if (Date.now() > (state.collapse.overlayUntil || 0)) {
+      el.style.display = "none";
+    } else {
+      el.style.display = "flex";
+    }
+  }
+
+  function enterCollapsePhase(reasonText = "臨界到達") {
+    ensureCollapseState();
+    if (state.collapse.active) return;
+
+    state.collapse.active = true;
+    state.collapse.enteredOnce = true;
+
+    const t = document.getElementById("collapse-text");
+    if (t) {
+      t.innerHTML =
+        `崩壊が始まりました。<br>` +
+        `環境・治安・健康が急激に悪化します。<br>` +
+        `<span style="color:#f87171;">原因：</span>${reasonText}`;
+    }
+    showCollapseOverlay(2200);
+
+    logMessage("⚠ 世界崩壊フェーズに突入…！");
+    updateUI();
+    saveGame();
+  }
+
+  // 解除条件（例）：環境/治安/健康が全て80%以上
+  function tryExitCollapsePhase() {
+  ensureCollapseState();
+  if (!state.collapse.active) return;
+
+  const now = Date.now();
+
+  // ✅ 復興解除（従来）：env/sec/heal 全て80%以上
+  const recovered =
+    (state.stats.env >= 80) &&
+    (state.stats.security >= 80) &&
+    (state.stats.health >= 80);
+
+  // ✅ 壊滅解除（救済）：人口10以下 & ゴミ0.5以下
+  const devastated =
+    (state.population <= 10) &&
+    ((state.wasteRate ?? 0) <= 0.5);
+
+  // ✅ 救済解除（新）：ゴミ1億以下 ＋ env/sec/healが30%以上を一定時間維持
+  const okStats =
+    (state.stats.env >= RECOVER_THRESHOLD) &&
+    (state.stats.security >= RECOVER_THRESHOLD) &&
+    (state.stats.health >= RECOVER_THRESHOLD);
+
+  const okWaste = (state.wasteRate ?? 0) <= RECOVER_WASTE_MAX;
+
+  let recoveredByHold = false;
+
+  if (okStats && okWaste) {
+    if (!state.collapse.recoverLastAt) state.collapse.recoverLastAt = now;
+    const dt = now - state.collapse.recoverLastAt;
+
+    state.collapse.recoverHoldMs = (state.collapse.recoverHoldMs ?? 0) + dt;
+    state.collapse.recoverLastAt = now;
+
+    if (state.collapse.recoverHoldMs >= RECOVER_HOLD_MS) {
+      recoveredByHold = true;
+    }
+  } else {
+    // 条件が崩れたらリセット
+    state.collapse.recoverHoldMs = 0;
+    state.collapse.recoverLastAt = now;
+  }
+
+  // ✅ 解除判定
+  if (!(recovered || recoveredByHold || devastated)) return;
+
+  // ✅ 解除処理
+  state.collapse.active = false;
+
+  // ✅ 解除直後の即再突入を防ぐ（5秒）
+  state.collapse.cooldownUntil = now + 5000;
+
+  if (devastated) {
+    // 壊滅解除：即再突入を避ける最低限の底上げ
+    state.stats.env = Math.max(state.stats.env, 5);
+    state.stats.security = Math.max(state.stats.security, 5);
+    state.stats.health = Math.max(state.stats.health, 5);
+    logMessage("🕯️ 崩壊は終わった…（壊滅）。ここから“ゼロからの再建”が始まる。");
+  } else if (recoveredByHold) {
+    logMessage("🌱 なんとか踏みとどまった…（救済解除）。街は再建へ向かう！");
+  } else {
+    logMessage("✨ 崩壊を食い止めた…街は持ち直した！");
+  }
+
+  const el = document.getElementById("collapse-overlay");
+  if (el) el.style.display = "none";
+
+  updateUI();
+  saveGame();
+}  // 崩壊中の毎秒処理（強制的に悪化）
+  function applyCollapseTick() {
+    ensureCollapseState();
+    if (!state.collapse.active) return;
+
+    state.stats.env      = clamp(state.stats.env      - 1.2, 0, 100);
+    state.stats.security = clamp(state.stats.security - 1.0, 0, 100);
+    state.stats.health   = clamp(state.stats.health   - 1.0, 0, 100);
+
+    state.wasteRate += 2.0;
+    state.population = Math.max(10, Math.floor(state.population * 0.99));
+
+    tickCollapseOverlay();
+    tryExitCollapsePhase();
+  }
+
+  function checkCollapseTriggers() {
+    ensureCollapseState();
+    if (state.collapse.active) return;
+
+  // ✅ 追加：解除直後は再突入しない
+  if (Date.now() < (state.collapse.cooldownUntil || 0)) return;
+
+    // 初回：赤塚公園チュートリアルボス撃破後に強制突入
+    if (!state.collapse.enteredOnce && state.collapse.tutorialBossDefeated) {
+      enterCollapsePhase("赤塚公園チュートリアル：ボス撃破後の崩壊突入");
+      return;
+    }
+
+    // 2回目以降：trash overflow
+    if ((state.wasteRate ?? 0) >= 1_000_000_000) {
+      enterCollapsePhase("OVERFLOW：ゴミが臨界（1,000,000,000）を突破");
+      return;
+    }
+
+    // env/sec/heal のうち2つ以上が0
+    const zeros =
+      (state.stats.env <= 0 ? 1 : 0) +
+      (state.stats.security <= 0 ? 1 : 0) +
+      (state.stats.health <= 0 ? 1 : 0);
+    if (zeros >= 2) {
+      enterCollapsePhase("臨界：環境/治安/健康のうち2つが0%");
+      return;
+    }
+
+    // 荒川ダンジョン「大量漂着ポイント」イベント発生（将来用）
+    if (state.collapse.driftEventFired) {
+      enterCollapsePhase("荒川ダンジョン：大量漂着ポイント発生");
+      state.collapse.driftEventFired = false; // 連続発火防止
+      return;
+    }
+  }
 
   function ensureSupportState() {
     if (!state.supports) state.supports = { inventory: [], slots: { slot1: null, slot2: null, slot3: null } };
@@ -974,12 +1258,17 @@
       if (!state.player.bagId) state.player.bagId = 'bag_s';
       if (!state.lastDisasterAt) state.lastDisasterAt = 0;
       if (!state.placing) state.placing = { active: false, type: null };
+      if (!state.patrol) state.patrol = { until: 0 };
       if (!state.dungeon) state.dungeon = { bossSpawned: false, bossDefeated: false, zeroUsed: false };
       if (state.dungeon.zeroUsed == null) state.dungeon.zeroUsed = false;
       if (!state.uiTab) state.uiTab = 'town';
       if (!state.mode) state.mode = 'town';
 
       if (state.player.baseDef == null) state.player.baseDef = 0;
+      if (!state.player.equip) state.player.equip = { weapon: null, hand: null, body: null };
+
+      // ✅ 崩壊フェーズのデフォルト補完
+      ensureCollapseState();
 
       if (state._supportMigrated_v2 == null) state._supportMigrated_v2 = false;
       migrateSupportsIfNeeded();
@@ -1028,6 +1317,94 @@
     logMessage(`装備変更：${item.name}（容量 ${item.cap}）`);
     updateUI();
     refreshShop();
+  }
+
+  function renderShop(){ refreshShop(); }
+  function updateHUD(){ updateUI(); }
+
+  function ensureEquipState(){
+    if (!state.player) state.player = {};
+    if (!state.player.equip) state.player.equip = { weapon: null, hand: null, body: null };
+  }
+
+  function gearSlotOf(id){
+    if (id.startsWith("tong")) return "weapon";
+    if (id.startsWith("glove")) return "hand";
+    if (id === "pad1") return "body";
+    if (id === "suit") return "body";
+    return null;
+  }
+
+  function getEquippedGearIdSet(){
+    ensureEquipState();
+    const e = state.player.equip;
+    return new Set([e.weapon, e.hand, e.body].filter(Boolean));
+  }
+
+  function getPlayerStats() {
+    ensureEquipState();
+
+    let bonus = { atk: 0, def: 0, spd: 0, luk: 0, hp: 0 };
+    const equipped = getEquippedGearIdSet();
+
+    state.inventory.forEach(inv => {
+      const base = BASE_SHOP_ITEMS.find(i => i.id === inv.id);
+      if (!base) return;
+      if (base.category === 'bag') return;
+
+      if (!equipped.has(inv.id)) return;
+
+      const mul = 1 + ((inv.plus ?? 0) * 0.2);
+      if (base.type) {
+        if (bonus[base.type] == null) bonus[base.type] = 0;
+        bonus[base.type] += Math.floor((base.val || 0) * mul);
+      }
+    });
+
+    const s = calcSupportBonus();
+
+    return {
+      atk: state.player.baseAtk + bonus.atk + s.atk,
+      def: state.player.baseDef + bonus.def + s.def,
+      spd: state.player.baseSpd + bonus.spd + s.spd,
+      luk: state.player.baseLuk + bonus.luk,
+      maxHp: state.player.maxHp + bonus.hp + s.maxHp
+    };
+  }
+
+  function toggleEquipGear(id) {
+    ensureEquipState();
+    const slot = gearSlotOf(id);
+    if (!slot) return;
+
+    const cur = state.player.equip[slot];
+    state.player.equip[slot] = (cur === id) ? null : id;
+
+    updateEquipUI();
+  }
+
+  function updateEquipUI() {
+    updateEquipTextUI();
+    renderShop();
+    updateHUD();
+  }
+
+  function updateEquipTextUI() {
+    ensureEquipState();
+    const e = state.player.equip;
+
+    const nameOf = (id) => {
+      if (!id) return "-";
+      const it = BASE_SHOP_ITEMS.find(x => x.id === id);
+      return it ? it.name : "-";
+    };
+
+    const w = document.getElementById("eq-weapon");
+    const h = document.getElementById("eq-hand");
+    const b = document.getElementById("eq-body");
+    if (w) w.innerText = nameOf(e.weapon);
+    if (h) h.innerText = nameOf(e.hand);
+    if (b) b.innerText = nameOf(e.body);
   }
 
   function getTownProgressLevel() {
@@ -1284,7 +1661,13 @@
     }
 
     state.stats.security += eff.securityRegen;
-    state.stats.health   += eff.healthRegen;
+
+    // ✅ パトロール中は治安回復が増える
+    if (isPatrolActive()) {
+      state.stats.security += PATROL_REGEN_BONUS;
+    }
+
+    state.stats.health += eff.healthRegen;
 
     if (state.wasteRate > 12) state.population = Math.max(10, state.population - 4);
     else if (state.wasteRate > 6) state.population = Math.max(10, state.population - 2);
@@ -1318,42 +1701,23 @@
 
   function mainLoopTick() {
     simulateCityTick({ isOffline: false });
+
+    // ✅ 崩壊フェーズ：判定＆崩壊中処理（毎秒）
+    checkCollapseTriggers();
+    applyCollapseTick();
+
     state.lastTick = Date.now();
     applyTownGrowth();
     updateUI();
     if (document.getElementById('tab-shop')?.classList.contains('active')) refreshShop();
   }
 
-  function getPlayerStats() {
-    let bonus = { atk: 0, def: 0, spd: 0, luk: 0, hp: 0 };
-
-    state.inventory.forEach(inv => {
-      const base = BASE_SHOP_ITEMS.find(i => i.id === inv.id);
-      if (!base) return;
-      if (base.category === 'bag') return;
-
-      const mul = 1 + ((inv.plus ?? 0) * 0.2);
-      if (base.type) {
-        if (bonus[base.type] == null) bonus[base.type] = 0;
-        bonus[base.type] += Math.floor((base.val || 0) * mul);
-      }
-    });
-
-    const s = calcSupportBonus();
-
-    return {
-      atk: state.player.baseAtk + bonus.atk + s.atk,
-      def: state.player.baseDef + bonus.def + s.def,
-      spd: state.player.baseSpd + bonus.spd + s.spd,
-      luk: state.player.baseLuk + bonus.luk,
-      maxHp: state.player.maxHp + bonus.hp + s.maxHp
-    };
-  }
-
   function updateUI() {
     ensureSupportState();
+    ensureCollapseState();
     updateLootMaxFromBag();
     updateAssetStatus();
+    updateEquipTextUI();
 
     const ps = getPlayerStats();
     state.player.hp = clamp(state.player.hp, 0, ps.maxHp);
@@ -1414,6 +1778,9 @@
       }
     }
 
+    // 崩壊演出オーバーレイの自然消灯
+    tickCollapseOverlay();
+
     setActiveNav(state.uiTab);
   }
 
@@ -1464,7 +1831,6 @@
     state.loot.cur = 0;
     state.dungeon = { bossSpawned: false, bossDefeated: false, zeroUsed: false };
 
-    // ✅ みらこ☆4以上：遠征開始時ドリンク増加
     applyMirakoDrinkBonusOnStart();
 
     document.getElementById('ui-town-ctrl').classList.add('hidden');
@@ -1687,6 +2053,13 @@
       const reduced = before - state.wasteRate;
 
       state.dungeon.bossDefeated = true;
+
+      // ✅ 初回チュートリアル扱い：救済ボス撃破 = tutorialBossDefeated
+      ensureCollapseState();
+      if (!state.collapse.enteredOnce) {
+        state.collapse.tutorialBossDefeated = true;
+      }
+
       state.enemy = null;
 
       setTimeout(() => {
@@ -1770,35 +2143,63 @@
     if (!container) return;
 
     ensureDefaultBagOwned();
+    ensureEquipState();
+
     container.innerHTML = '';
+
+    const equippedSet = getEquippedGearIdSet();
 
     BASE_SHOP_ITEMS.forEach(item => {
       const isUnlocked = state.population >= (item.req || 0);
       const isOwned = state.inventory.some(i => i.id === item.id);
       const isBag = item.category === 'bag';
-      const isEquipped = isBag && (state.player.bagId === item.id);
 
-      let labelRight = '';
       let btnClass = "btn-action w-full flex justify-between items-center";
+      let labelRight = '';
+      let onclick = '';
 
       if (isBag) {
+        const isEquipped = (state.player.bagId === item.id);
+
         if (!isUnlocked) {
           btnClass += " disabled";
           labelRight = `人口${item.req}必要`;
+          onclick = "void(0)";
         } else if (!isOwned) {
           if (state.money < item.price) btnClass += " disabled";
           labelRight = `${item.price}G`;
+          onclick = `buyItem('${item.id}')`;
         } else {
           labelRight = isEquipped ? "装備中" : "所持(タップで装備)";
+          onclick = `equipBag('${item.id}')`;
         }
-      } else {
-        if (!isUnlocked || isOwned || state.money < item.price) btnClass += " disabled";
-        labelRight = isOwned ? "所持中" : `${item.price}G`;
+
+        const leftText = `${item.icon} ${item.name}（容量${item.cap}）`;
+        const div = document.createElement('div');
+        div.innerHTML = `<button onclick="${onclick}" class="${btnClass}">
+          <span>${leftText}</span>
+          <span>${labelRight}</span>
+        </button>`;
+        container.appendChild(div);
+        return;
       }
 
-      const leftText = isBag ? `${item.icon} ${item.name}（容量${item.cap}）` : `${item.icon} ${item.name}`;
-      const onclick = isBag ? (!isOwned ? `buyItem('${item.id}')` : `equipBag('${item.id}')`) : `buyItem('${item.id}')`;
+      const isEquipped = equippedSet.has(item.id);
 
+      if (!isUnlocked) {
+        btnClass += " disabled";
+        labelRight = `人口${item.req}必要`;
+        onclick = "void(0)";
+      } else if (!isOwned) {
+        if (state.money < item.price) btnClass += " disabled";
+        labelRight = `${item.price}G`;
+        onclick = `buyItem('${item.id}')`;
+      } else {
+        labelRight = isEquipped ? "装備中(解除)" : "所持(装備)";
+        onclick = `toggleEquipGear('${item.id}')`;
+      }
+
+      const leftText = `${item.icon} ${item.name}`;
       const div = document.createElement('div');
       div.innerHTML = `<button onclick="${onclick}" class="${btnClass}">
         <span>${leftText}</span>
@@ -2102,6 +2503,8 @@
     setupPlayerSpriteMeta();
 
     ensureSupportState();
+    ensureCollapseState();
+
     applyOfflineProgress();
     enableAutoSave();
 
