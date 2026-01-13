@@ -165,10 +165,91 @@
       from { opacity: 0; transform: translateY(6px); }
       to   { opacity: 0.95; transform: translateY(0); }
     }
-  </style>
+  
+/* =========================
+   オープニング演出（空→街→タイトル）
+   ※背景画像は assets/itabashi_opening.png を想定
+========================= */
+#opening-screen{
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  overflow: hidden;
+  background: #000;
+}
+#opening-bg{
+  position: absolute;
+  width: 100%;
+  height: 170%;
+  background-image: url("assets/itabashi_opening.png");
+  background-size: cover;
+  background-position: top center;
+  transform: translateY(0);
+  animation: openingPan 12s ease-in-out forwards;
+}
+@keyframes openingPan{
+  from{ transform: translateY(0); }
+  to{ transform: translateY(-38%); }
+}
+#opening-title{
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 22%;
+  text-align: center;
+  color: #fff;
+  font-family: 'DotGothic16', sans-serif;
+  opacity: 0;
+  transform: translateY(12px);
+  animation: openingFade 3s ease forwards;
+  animation-delay: 9.5s;
+  padding: 0 16px;
+}
+@keyframes openingFade{
+  from{ opacity: 0; transform: translateY(12px); }
+  to{ opacity: 1; transform: translateY(0); }
+}
+#opening-title h1{
+  font-size: 34px;
+  letter-spacing: 0.30em;
+  margin: 0;
+}
+#opening-title p{
+  margin: 14px 0 0 0;
+  font-size: 14px;
+  opacity: 0.92;
+}
+#opening-skip{
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  font-family: 'DotGothic16', sans-serif;
+  font-size: 12px;
+  padding: 8px 10px;
+  border: 1px solid rgba(255,255,255,0.55);
+  background: rgba(0,0,0,0.35);
+  color: #fff;
+  border-radius: 10px;
+  cursor: pointer;
+}
+#opening-skip:active{ transform: scale(0.98); }
+
+</style>
 </head>
 
 <body>
+  <!-- =========================
+       オープニング演出（空→街→タイトル）
+  ========================== -->
+  <div id="opening-screen" aria-hidden="true">
+    <div id="opening-bg"></div>
+    <div id="opening-title">
+      <h1>板橋</h1>
+      <p>〜好きな街をもう一度好きになれたら〜</p>
+    </div>
+    <button id="opening-skip" type="button">SKIP</button>
+  </div>
+
   <div class="app-container">
     <!-- ステータスバー -->
     <div class="grid grid-cols-3 gap-1 p-2 bg-black border-b-2 border-white text-[10px]">
@@ -232,6 +313,27 @@
           <div id="itabashi-choices" class="w-full space-y-2 hidden">
             <button id="itabashi-choice-1" class="btn-action w-full"></button>
             <button id="itabashi-choice-2" class="btn-action w-full"></button>
+          </div>
+        </div>
+      </div>
+
+
+      <!-- ✅ 真エンディング演出：板橋の光が広がるマップオーバーレイ -->
+      <div id="ending-map-overlay" style="display:none; position:fixed; inset:0; z-index:3500; background:#000; align-items:center; justify-content:center;">
+        <canvas id="ending-map-canvas" style="width:100%; height:100%;"></canvas>
+
+        <div id="ending-map-hint" style="position:absolute; bottom:14px; left:0; right:0; text-align:center; font-size:11px; color:rgba(255,255,255,0.75);">
+          タップでスキップ
+        </div>
+
+        <div id="ending-credits" style="display:none; position:absolute; inset:0; background:rgba(0,0,0,0.75); align-items:center; justify-content:center; padding:18px;">
+          <div class="bg-black/70 border border-white/30 p-4 w-full max-w-sm text-center space-y-3">
+            <div class="text-white font-bold text-lg">完</div>
+            <div class="text-[11px] text-gray-200 leading-relaxed">
+              みんなの心がひとつになり<br>
+              この地域の崩壊を止めた。
+            </div>
+            <button id="btn-ending-close" class="btn-action w-full bg-gray-800">タイトルへ戻る</button>
           </div>
         </div>
       </div>
@@ -385,7 +487,7 @@
           <button id="btn-dungeon-akatsuka" onclick="selectDungeon('akatsuka')" class="btn-action w-full">🌳 赤塚公園（初級）</button>
           <button id="btn-dungeon-takashimadaira" onclick="selectDungeon('takashimadaira')" class="btn-action w-full">🏙️ 高島平（中級）</button>
           <button id="btn-dungeon-arakawa" onclick="selectDungeon('arakawa')" class="btn-action w-full">🌊 荒川（上級）</button>
-          <button id="btn-dungeon-national" onclick="selectDungeon('national')" class="btn-action w-full bg-yellow-700">🌏 全国一斉（最終）</button>
+          <button id="btn-dungeon-national" onclick="selectDungeon('national')" class="btn-action w-full bg-yellow-700">🌏 板橋区一斉ゴミ拾い（最終）</button>
         </div>
         <div id="ui-town-ctrl" class="space-y-3">
           <div class="flex justify-between text-xs">
@@ -592,7 +694,7 @@
     },
     national: {
       id: "national",
-      name: "全国一斉",
+      name: "板橋区一斉ゴミ拾い",
       desc: "最終ステージ",
       boss: {
         n: "文明の負債",
@@ -670,7 +772,7 @@
       btnAr.classList.add('disabled');
     }
 
-    // 全国一斉（最終）
+    // 板橋区一斉ゴミ拾い（最終）
     if (isDungeonUnlocked('national')) {
       btnNa.innerText = `🌏 ${DUNGEONS.national.name}（最終）`;
       btnNa.classList.remove('disabled');
@@ -974,7 +1076,13 @@ trust: 0, // ✅ 信頼ゲージ（0〜100）
     // ✅ フラグ管理（イベント用）
     flags: {
       // 赤塚公園クリア後イベント（板橋イベント）が実行済みか
-      itabashiEventDone: false
+      itabashiEventDone: false,
+      // 高島平クリア後イベントが実行済みか
+      takashimadairaEventDone: false,
+      // 荒川クリア後イベントが実行済みか
+      arakawaEventDone: false,
+      // 最終ステージ（板橋区一斉ゴミ拾い）が解放済みか
+      finalStageUnlocked: false
     },
     // ✅ 転生回数をトラッキング（初期値0）
     reincarnations: 0,
@@ -2324,6 +2432,12 @@ if (ns) {
 
   function startDungeon() {
     cancelPlacing();
+
+    // ✅ 最終ステージ（板橋区一斉ゴミ拾い）は戦闘ではなく真エンディングへ
+    if ((state.selectedDungeon || 'akatsuka') === 'national') {
+      startTrueEndingSequence();
+      return;
+    }
     state.mode = 'dungeon';
     state.uiTab = 'explore';
 
@@ -2693,6 +2807,10 @@ if (ns) {
     // ✅ 高島平クリア後イベントチェック
     // 高島平を初めてクリアしたあと、帰還時にイベントを発火する
     maybeTriggerTakashimadairaEvent();
+
+    // ✅ 荒川クリア後イベントチェック
+    // 荒川を初めてクリアしたあと、帰還時にイベントを発火する
+    maybeTriggerArakawaEvent();
 }
 
   function refreshShop() {
@@ -3452,6 +3570,102 @@ if (ns) {
   }
 
   // =========================================================
+  // 荒川クリア後イベント（最終ステージ解放イベント）
+  // =========================================================
+  // 荒川ダンジョンを初めてクリアした際に発生する板橋イベントです。
+  let arakawaIndex = 0;
+  const arakawaMessages = [
+    "君は一度、終わりを見た。",
+    "それでも、戻ってきた。",
+    "……諦めなかった。",
+    "だから、扉は開く。",
+    "",
+    "大丈夫だ。",
+    "君はもう、ひとりじゃない。",
+    "",
+    "——最後の仕上げに移ろう。"
+  ];
+
+  function triggerArakawaEvent() {
+    if (state.flags?.arakawaEventDone) return;
+    arakawaIndex = 0;
+    updateArakawaText();
+    const modal = document.getElementById('itabashi-modal');
+    if (!modal) return;
+    const tapEl = document.getElementById('itabashi-tap');
+    const choicesEl = document.getElementById('itabashi-choices');
+    if (tapEl) tapEl.style.display = '';
+    if (choicesEl) choicesEl.style.display = 'none';
+    modal.style.display = 'flex';
+    modal.addEventListener('click', advanceArakawa);
+  }
+
+  function updateArakawaText() {
+    const textEl = document.getElementById('itabashi-text');
+    if (!textEl) return;
+    const msg = arakawaMessages[arakawaIndex] || '';
+    textEl.innerHTML = msg.replace(/\n/g, '<br>');
+  }
+
+  function advanceArakawa() {
+    arakawaIndex++;
+    if (arakawaIndex >= arakawaMessages.length) {
+      const modal = document.getElementById('itabashi-modal');
+      if (!modal) return;
+      modal.removeEventListener('click', advanceArakawa);
+      const tapEl = document.getElementById('itabashi-tap');
+      const choicesEl = document.getElementById('itabashi-choices');
+      if (tapEl) tapEl.style.display = 'none';
+      if (choicesEl) {
+        choicesEl.style.display = 'block';
+        const btn1 = document.getElementById('itabashi-choice-1');
+        const btn2 = document.getElementById('itabashi-choice-2');
+        if (btn1) {
+          btn1.innerText = '行く';
+          btn1.onclick = function() { completeArakawaEvent(); };
+        }
+        if (btn2) {
+          btn2.innerText = '準備してから行く';
+          btn2.onclick = function() { completeArakawaEvent(); };
+        }
+      }
+      return;
+    }
+    updateArakawaText();
+  }
+
+  function completeArakawaEvent() {
+    const modal = document.getElementById('itabashi-modal');
+    if (modal) {
+      modal.removeEventListener('click', advanceArakawa);
+      modal.style.display = 'none';
+    }
+    if (!state.flags) state.flags = {};
+    const reinc = state.reincarnations ?? 0;
+    const canUnlock = reinc >= 1 &&
+                      state?.cleared?.akatsuka &&
+                      state?.cleared?.takashimadaira &&
+                      state?.cleared?.arakawa;
+    if (canUnlock) {
+      // 最終ステージを解放し、イベント完了フラグを立てる
+      state.flags.finalStageUnlocked = true;
+      state.flags.arakawaEventDone = true;
+      logMessage('最終ステージ「板橋区一斉ゴミ拾い」が解放されました！');
+    } else {
+      // 解放条件を満たしていない場合、フラグは更新しない（次回再挑戦で再度表示する）
+      logMessage('「板橋区一斉ゴミ拾い」は転生後に挑戦できます。転生して再度挑戦しましょう。');
+    }
+    updateUI();
+    saveGame();
+  }
+
+  function maybeTriggerArakawaEvent() {
+    if (state?.cleared?.arakawa && !state.flags?.arakawaEventDone) {
+      setTimeout(() => { triggerArakawaEvent(); }, 600);
+    }
+  }
+
+  // =========================================================
   // ✅ 崩壊フェーズ板橋イベント処理
   // =========================================================
   // 崩壊フェーズ時の板橋イベントを開始する
@@ -3530,7 +3744,10 @@ if (ns) {
       if (!modal) return;
       modal.removeEventListener('click', advanceTrueEndingItabashi);
       modal.style.display = 'none';
-      // 最終イベント後の後処理（必要ならここで板橋を永久削除など）
+
+      // ✅ セリフ後：板橋区マップに光が広がる演出へ
+      startItabashiLightEnding();
+
       return;
     }
     updateTrueEndingItabashiText();
@@ -3707,6 +3924,53 @@ if (ns) {
       setupSkills();
     } catch (e) {
       console.warn('setupSkills failed', e);
+    }
+
+    // ✅ オープニング演出 → 終了後に導入イベント（板橋）へ
+    const OPENING_KEY = 'itabashiOpeningShown_v1';
+
+    const finishOpening = () => new Promise((resolve) => {
+      const opening = document.getElementById('opening-screen');
+      if (!opening) return resolve();
+
+      opening.style.transition = 'opacity 1.2s ease';
+      opening.style.opacity = '0';
+      setTimeout(() => {
+        opening.remove();
+        resolve();
+      }, 1200);
+    });
+
+    const runOpeningIfNeeded = async () => {
+      const opening = document.getElementById('opening-screen');
+      if (!opening) return;
+
+      const already = localStorage.getItem(OPENING_KEY);
+      if (already) {
+        opening.remove();
+        return;
+      }
+
+      // ✅ SKIPボタン
+      const skipBtn = document.getElementById('opening-skip');
+      const skip = async () => {
+        localStorage.setItem(OPENING_KEY, 'true');
+        await finishOpening();
+      };
+      if (skipBtn) skipBtn.addEventListener('click', (e) => { e.stopPropagation(); skip(); });
+
+      // 演出が終わるのを待つ（背景12s＋余韻）
+      await new Promise(r => setTimeout(r, 13000));
+      localStorage.setItem(OPENING_KEY, 'true');
+      await finishOpening();
+    };
+
+    try {
+      await runOpeningIfNeeded();
+    } catch (e) {
+      console.warn('opening failed', e);
+      const opening = document.getElementById('opening-screen');
+      if (opening) opening.remove();
     }
 
     // 初回プレイ時の導入イベントを表示
